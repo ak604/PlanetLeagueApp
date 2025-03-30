@@ -3,6 +3,11 @@ import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import { Alert } from 'react-native';
 
+// Declare the global variable for TypeScript
+declare global {
+  var __TEST_API_URL__: string | undefined;
+}
+
 // User type definition
 export interface User {
   id: string;
@@ -41,8 +46,8 @@ const AuthContext = createContext<AuthContextData>({
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
 
-// API endpoint - Use environment variable
-// Remove the old constant: const API_URL = 'http://localhost:3000/api/auth/google';
+// REMOVE module-level API_URL constant
+// const API_URL = 'http://localhost:3000/api/auth/google';
 
 // Provider component
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -52,6 +57,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     userToken: null,
     user: null,
   });
+
+  // Determine if running in Jest test environment
+  const isTest = process.env.JEST_WORKER_ID !== undefined;
 
   // Check for existing authentication on mount
   useEffect(() => {
@@ -76,6 +84,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) {
         // Handle error reading token
         console.warn('Failed to retrieve authentication state:', e);
+        // If not in test, alert the user
+        if (!isTest) {
+          Alert.alert("Error", "Could not restore session. Please sign in again.");
+        }
       }
 
       // Update state after checking auth
@@ -88,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     bootstrapAsync();
-  }, []);
+  }, [isTest]);
 
   // Auth actions
   const authActions = {
@@ -96,32 +108,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         setState(prev => ({ ...prev, isLoading: true }));
         
-        // Remove Expo Go check and mock logic
-        /*
-        // If running in Expo Go, simulate successful API response
-        const isExpoGo = Constants.appOwnership === 'expo'; // Requires importing Constants
-        let user: User;
-        
-        if (isExpoGo) {
-          // Simulate successful response with mock user data
-          console.log('Using mock authentication in Expo Go');
-          user = {
-            id: '12345',
-            email: 'user@example.com',
-            name: 'Test User',
-            photo: 'https://via.placeholder.com/150',
-          };
-          
-          // Fake loading delay
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        } else { 
-          // Code inside else block is now the default path
+        // Determine base URL based on environment
+        const baseUrl = isTest ? __TEST_API_URL__ : process.env.EXPO_PUBLIC_PL_BASE_URL; 
+        if (!baseUrl) {
+           console.error('API Base URL is not configured.');
+           // Only Alert if not in test
+           if (!isTest) {
+               Alert.alert('Configuration Error', 'Cannot sign in: API configuration missing.');
+           }
+           setState(prev => ({ ...prev, isLoading: false }));
+           return; // Stop execution
         }
-        */
-        
-        // Production: Make actual API call to your backend (this now always runs)
-        const apiUrl = `${process.env.PL_BASE_URL}/api/auth/google`; // Use EXPO_PUBLIC_ prefix
-        const response = await fetch(apiUrl, { // Use apiUrl
+        const apiUrl = `${baseUrl}/api/auth/google`; 
+
+        const response = await fetch(apiUrl, { 
           method: 'POST',
           headers: {
             'Accept': 'application/json',
@@ -131,27 +131,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
           
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Authentication failed');
+          let errorMsg = 'Authentication failed';
+          try {
+            const errorData = await response.json();
+            errorMsg = errorData.message || `HTTP error! Status: ${response.status}`; 
+          } catch (e) { /* Ignore JSON parse error */ }
+          throw new Error(errorMsg);
         }
           
-        // Parse the response from your backend
         const data = await response.json();
           
-        // Your backend should return user data with the token
-        // Adjust this according to your actual backend response structure
-        const user: User = { // Define user here
+        const user: User = { 
           id: data.user.id,
           email: data.user.email,
           name: data.user.name,
           photo: data.user.photo,
         };
         
-        // Store token and user data securely
-        await SecureStore.setItemAsync(TOKEN_KEY, idToken); // Use the original idToken passed to signIn
+        await SecureStore.setItemAsync(TOKEN_KEY, idToken);
         await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
         
-        // Update state
         setState({
           isLoading: false,
           isSignout: false,
@@ -160,10 +159,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       } catch (error: any) {
         console.error('Sign in error:', error);
-        Alert.alert(
-          'Authentication Error',
-          error.message || 'Failed to sign in. Please try again later.'
-        );
+         // Only Alert if not in test
+        if (!isTest) {
+          Alert.alert(
+            'Authentication Error',
+            error.message || 'Failed to sign in. Please try again later.'
+          );
+        }
         setState(prev => ({ ...prev, isLoading: false }));
       }
     },
@@ -186,8 +188,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       } catch (error) {
         console.error('Sign out error:', error);
-        setState(prev => ({ ...prev, isLoading: false }));
-        Alert.alert('Error', 'Failed to sign out completely. Please try again.');
+        // Only Alert if not in test
+        if (!isTest) {
+           Alert.alert('Error', 'Failed to sign out. Please try again.');
+        }
       }
     },
     

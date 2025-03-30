@@ -2,6 +2,8 @@
 
 # dependencies
 node_modules/
+# android/ # No longer ignore entire directory
+# ios/ # No longer ignore entire directory
 
 # Expo
 .expo/
@@ -9,27 +11,48 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# --- Android --- #
+# Ignore generated build files and caches
+android/app/build/
+android/build/
+android/.gradle/
+android/gradle/
+# Ignore keystores (also covered by *.jks)
+android/app/debug.keystore
+# Ignore local properties (like SDK path)
+android/local.properties
+# Ignore generated crash logs
+hs_err_pid*.log
+replay_pid*.log
+
+# --- iOS --- #
+# Add specific iOS ignores if/when needed, e.g.
+# ios/Pods/
+# ios/build/
+# ios/.xcode.env.local
+
+# Native Signing / Secrets
 *.orig.*
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
+*.pem
 
 # Metro
 .metro-health-check*
 
-# debug
+# debug logs
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
 # macOS
 .DS_Store
-*.pem
 
 # local env files
+.env # Ignore main env file (potentially contains secrets)
 .env*.local
 
 # typescript

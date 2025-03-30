@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "722533014078",
+    "project_id": "planet-league-454207",
+    "storage_bucket": "planet-league-454207.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:722533014078:android:f5d9be68536f31c206cf6f",
+        "android_client_info": {
+          "package_name": "com.planetleague.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "722533014078-ph3ud0bil0q2rj509lcaqq718v5skkls.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBge-Fln668pSLRi7OM6SylRCThqGwIUOA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "722533014078-ph3ud0bil0q2rj509lcaqq718v5skkls.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
