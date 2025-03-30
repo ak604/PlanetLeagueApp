@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, FlatList, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { useToken } from '../context/TokenContext';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import NFTCard from '../components/NFTCard';
+import { PLTTokenIcon } from '../components/ui/PLTTokenIcon';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Colors } from '@/constants/Colors';
 import { Theme } from '@/constants/Theme';
@@ -40,29 +42,52 @@ const GAME_HISTORY = [
 ];
 
 export default function ProfileScreen() {
-  const { user, signOut, isLoading: authLoading } = useAuth();
+  const { user, signOut, isLoading: authLoading, gameData } = useAuth();
+  const { 
+    balance, 
+    isLoading: tokenLoading, 
+    refreshBalance, 
+    setWalletAddress,
+    walletAddress: currentWalletAddress,
+    lastUpdated,
+    error: tokenError
+  } = useToken();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
-  const [activeTab, setActiveTab] = useState('stats'); // 'stats', 'nfts', or 'history'
+  const [activeTab, setActiveTab] = useState<'profile' | 'stats' | 'nfts'>('stats');
   const [nfts, setNfts] = useState<NFT[]>(MOCK_NFTS);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [loadingMessage, setLoadingMessage] = useState('Loading profile data...');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [loadingProgress, setLoadingProgress] = useState<number>(0);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
 
-  // Function to simulate loading data with progress updates
   const loadUserData = async () => {
-    setIsLoading(true);
-    setLoadingProgress(0);
-    setLoadingMessage('Connecting to server...');
-    
     try {
-      // Simulate API connection
+      setIsLoading(true);
+      setLoadingProgress(0);
+      setLoadingMessage('Connecting to servers...');
+      
       await new Promise(resolve => setTimeout(resolve, 800));
       setLoadingProgress(0.2);
       setLoadingMessage('Fetching profile data...');
       
-      // Simulate profile data loading
+      // Simulate profile data loading and fetch wallet address
       await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Use the wallet address from gameData rather than hardcoding it
+      if (gameData && gameData.walletAddress) {
+        // Set the wallet address first
+        setWalletAddress(gameData.walletAddress);
+        
+        // Then refresh the balance using this address
+        await refreshBalance(gameData.walletAddress);
+      } else {
+        console.warn('No wallet address found in gameData. Check if gameData was loaded correctly.');
+        // Fallback to current wallet address if already set
+        if (currentWalletAddress) {
+          await refreshBalance(currentWalletAddress);
+        }
+      }
+      
       setLoadingProgress(0.5);
       setLoadingMessage('Loading game history...');
       
@@ -74,10 +99,8 @@ export default function ProfileScreen() {
       // Simulate NFT data loading
       await new Promise(resolve => setTimeout(resolve, 1200));
       setLoadingProgress(0.9);
-      setLoadingMessage('Finalizing...');
+      setLoadingMessage('Connecting to blockchain...');
       
-      // Simulate finalizing
-      await new Promise(resolve => setTimeout(resolve, 500));
       setLoadingProgress(1);
       
       // Wait a moment at 100% for visual feedback
@@ -116,58 +139,184 @@ export default function ProfileScreen() {
     loadUserData();
   };
 
-  const renderStatsTab = () => (
-    <ScrollView style={styles.tabContent}>
-      <View style={[styles.statsCard, { backgroundColor: colors.card }]}>
-        <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: colors.subtext }]}>Total $PLT Earned</Text>
-          <Text style={[styles.statValue, { color: colors.text }]}>1,250</Text>
+  const renderProfileTab = () => {
+    return (
+      <ScrollView style={styles.tabContent}>
+        <View style={[styles.statsCard, { backgroundColor: colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>User Profile</Text>
+          
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: colors.subtext }]}>Email</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{user?.email || 'Not available'}</Text>
+          </View>
+          
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: colors.subtext }]}>User ID</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{user?.id || 'Not available'}</Text>
+          </View>
+          
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: colors.subtext }]}>Wallet</Text>
+            <Text 
+              style={[styles.statValue, { color: colors.text }]}
+              numberOfLines={1}
+              ellipsizeMode="middle"
+            >
+              {currentWalletAddress || 'Not connected'}
+            </Text>
+          </View>
         </View>
-        
-        <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: colors.subtext }]}>NFTs Owned</Text>
-          <Text style={[styles.statValue, { color: colors.text }]}>{nfts.length}</Text>
-        </View>
-        
-        <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: colors.subtext }]}>Games Played</Text>
-          <Text style={[styles.statValue, { color: colors.text }]}>{GAME_HISTORY.length}</Text>
-        </View>
-        
-        <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: colors.subtext }]}>Win Rate</Text>
-          <Text style={[styles.statValue, { color: colors.text }]}>
-            {`${Math.round((GAME_HISTORY.filter(game => game.result === 'Won').length / GAME_HISTORY.length) * 100)}%`}
+
+        <TouchableOpacity 
+          style={[styles.refreshButton, { backgroundColor: colors.primary, marginTop: Theme.spacing.lg, alignSelf: 'center' }]}
+          onPress={handleRefresh}
+        >
+          <Text style={styles.refreshButtonText}>Refresh Profile</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  };
+
+  const renderStatsTab = () => {
+    const { walletAddress, lastUpdated, error: tokenError } = useToken();
+    
+    const handleTokenRefresh = () => {
+      if (walletAddress) {
+        refreshBalance(walletAddress);
+      } else {
+        refreshBalance();
+      }
+    };
+    
+    // Format the last updated time
+    const getLastUpdatedText = () => {
+      if (!lastUpdated) return 'Never updated';
+      
+      // Format as relative time (e.g., "5 minutes ago")
+      const now = new Date();
+      const diffMs = now.getTime() - lastUpdated.getTime();
+      
+      if (diffMs < 60000) { // Less than a minute
+        return 'Just now';
+      } else if (diffMs < 3600000) { // Less than an hour
+        const minutes = Math.floor(diffMs / 60000);
+        return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+      } else if (diffMs < 86400000) { // Less than a day
+        const hours = Math.floor(diffMs / 3600000);
+        return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+      } else {
+        // Format as date and time for older updates
+        return lastUpdated.toLocaleString();
+      }
+    };
+    
+    return (
+      <ScrollView style={styles.tabContent}>
+        {/* PLT Token Card */}
+        <View style={[styles.tokenCard, { backgroundColor: colors.card }]}>
+          <View style={styles.tokenHeaderRow}>
+            <Text style={[styles.tokenTitle, { color: colors.text }]}>Your PLT Tokens</Text>
+            <TouchableOpacity 
+              style={[styles.smallRefreshButton, { backgroundColor: colors.primary }]}
+              onPress={handleTokenRefresh}
+              disabled={tokenLoading}
+            >
+              {tokenLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.smallRefreshButtonText}>Refresh</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.tokenBalanceContainer}>
+            <PLTTokenIcon size={40} showAmount={false} />
+            <Text style={[styles.tokenBalance, { color: colors.text }]}>
+              {balance?.toLocaleString() || '0'} <Text style={styles.tokenSymbol}>PLT</Text>
+            </Text>
+          </View>
+          
+          {tokenError && (
+            <Text style={[styles.errorText, { color: colors.error, fontSize: Theme.typography.sizes.xs, marginVertical: Theme.spacing.xs }]}>
+              {tokenError}
+            </Text>
+          )}
+          
+          <Text style={[styles.blockchainInfo, { color: colors.subtext }]}>
+            Token on Nebula Gaming Hub (Chain ID: 0x235ddd0)
+          </Text>
+          
+          <Text style={[styles.blockchainInfo, { color: colors.subtext, marginTop: 4 }]}>
+            Contract: 0x48dDea582f933eA6FD8D1490a03B94382Dc7bc07
+          </Text>
+          
+          <View style={styles.walletContainer}>
+            <Text style={[styles.walletLabel, { color: colors.subtext }]}>Your wallet:</Text>
+            <Text 
+              style={[styles.walletAddress, { color: colors.primary }]}
+              numberOfLines={1}
+              ellipsizeMode="middle"
+            >
+              {walletAddress || '...'}
+            </Text>
+          </View>
+          
+          <Text style={[styles.lastUpdated, { color: colors.subtext }]}>
+            Last updated: {getLastUpdatedText()}
           </Text>
         </View>
-      </View>
-      
-      <View style={styles.recentActivity}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Activity</Text>
-        {GAME_HISTORY.slice(0, 3).map(game => (
-          <View key={game.id} style={[styles.activityItem, { borderBottomColor: colors.divider }]}>
-            <Text style={{ color: colors.text }}>{game.game}</Text>
-            <View style={styles.activityDetails}>
-              <Text style={{ color: colors.subtext }}>{game.date}</Text>
-              <Text style={{ 
-                color: game.result === 'Won' ? colors.success : colors.error,
-                fontWeight: 'bold' 
-              }}>
-                {game.result}
-              </Text>
-            </View>
+        
+        <View style={[styles.statsCard, { backgroundColor: colors.card }]}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: colors.subtext }]}>Total $PLT Earned</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{balance?.toLocaleString() || '0'}</Text>
           </View>
-        ))}
-      </View>
-      
-      <TouchableOpacity 
-        style={[styles.refreshButton, { backgroundColor: colors.primary }]}
-        onPress={handleRefresh}
-      >
-        <Text style={styles.refreshButtonText}>Refresh Data</Text>
-      </TouchableOpacity>
-    </ScrollView>
-  );
+          
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: colors.subtext }]}>NFTs Owned</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{nfts.length}</Text>
+          </View>
+          
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: colors.subtext }]}>Games Played</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{GAME_HISTORY.length}</Text>
+          </View>
+          
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: colors.subtext }]}>Win Rate</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>
+              {`${Math.round((GAME_HISTORY.filter(game => game.result === 'Won').length / GAME_HISTORY.length) * 100)}%`}
+            </Text>
+          </View>
+        </View>
+        
+        <View style={styles.recentActivity}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Activity</Text>
+          {GAME_HISTORY.slice(0, 3).map(game => (
+            <View key={game.id} style={[styles.activityItem, { borderBottomColor: colors.divider }]}>
+              <Text style={{ color: colors.text }}>{game.game}</Text>
+              <View style={styles.activityDetails}>
+                <Text style={{ color: colors.subtext }}>{game.date}</Text>
+                <Text style={{ 
+                  color: game.result === 'Won' ? colors.success : colors.error,
+                  fontWeight: 'bold' 
+                }}>
+                  {game.result}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+        
+        <TouchableOpacity 
+          style={[styles.refreshButton, { backgroundColor: colors.primary }]}
+          onPress={handleRefresh}
+        >
+          <Text style={styles.refreshButtonText}>Refresh Data</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  };
 
   const renderNFTsTab = () => (
     <View style={styles.tabContent}>
@@ -197,40 +346,6 @@ export default function ProfileScreen() {
         onPress={handleRefresh}
       >
         <Text style={styles.refreshButtonText}>Refresh NFTs</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderHistoryTab = () => (
-    <View style={styles.tabContent}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Game History</Text>
-      <FlatList
-        data={GAME_HISTORY}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={[styles.historyItem, { borderBottomColor: colors.divider }]}>
-            <View>
-              <Text style={[styles.historyGameName, { color: colors.text }]}>{item.game}</Text>
-              <Text style={[styles.historyDate, { color: colors.subtext }]}>{item.date}</Text>
-            </View>
-            <View style={styles.historyDetails}>
-              <Text style={[styles.historyScore, { color: colors.text }]}>{item.score} pts</Text>
-              <Text style={{ 
-                color: item.result === 'Won' ? colors.success : colors.error,
-                fontWeight: 'bold'
-              }}>
-                {item.result}
-              </Text>
-            </View>
-          </View>
-        )}
-      />
-      
-      <TouchableOpacity 
-        style={[styles.refreshButton, { backgroundColor: colors.primary, marginTop: Theme.spacing.lg, alignSelf: 'center' }]}
-        onPress={handleRefresh}
-      >
-        <Text style={styles.refreshButtonText}>Refresh History</Text>
       </TouchableOpacity>
     </View>
   );
@@ -279,7 +394,21 @@ export default function ProfileScreen() {
           </View>
 
           {/* Tab Navigation */}
-          <View style={[styles.tabs, { borderBottomColor: colors.divider }]}>
+          <View style={styles.tabs}>
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'profile' && [styles.activeTab, { borderBottomColor: colors.primary }]]} 
+              onPress={() => setActiveTab('profile')}
+            >
+              <Text
+                style={[
+                  styles.tabText, 
+                  { color: activeTab === 'profile' ? colors.primary : colors.subtext }
+                ]}
+              >
+                Profile
+              </Text>
+            </TouchableOpacity>
+            
             <TouchableOpacity 
               style={[styles.tab, activeTab === 'stats' && [styles.activeTab, { borderBottomColor: colors.primary }]]} 
               onPress={() => setActiveTab('stats')}
@@ -307,27 +436,13 @@ export default function ProfileScreen() {
                 NFTs
               </Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.tab, activeTab === 'history' && [styles.activeTab, { borderBottomColor: colors.primary }]]} 
-              onPress={() => setActiveTab('history')}
-            >
-              <Text
-                style={[
-                  styles.tabText, 
-                  { color: activeTab === 'history' ? colors.primary : colors.subtext }
-                ]}
-              >
-                History
-              </Text>
-            </TouchableOpacity>
           </View>
 
           {/* Tab Content */}
           <View style={styles.tabContentContainer}>
+            {activeTab === 'profile' && renderProfileTab()}
             {activeTab === 'stats' && renderStatsTab()}
             {activeTab === 'nfts' && renderNFTsTab()}
-            {activeTab === 'history' && renderHistoryTab()}
           </View>
 
           {/* Actions */}
@@ -529,5 +644,64 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: 'bold',
     fontSize: Theme.typography.sizes.md,
+  },
+  tokenCard: {
+    borderRadius: Theme.borderRadius.md,
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
+    ...Theme.shadows.md,
+  },
+  tokenHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Theme.spacing.sm,
+  },
+  tokenTitle: {
+    fontSize: Theme.typography.sizes.md,
+    fontWeight: 'bold',
+  },
+  tokenBalanceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: Theme.spacing.md,
+  },
+  tokenBalance: {
+    fontSize: Theme.typography.sizes.xxl,
+    fontWeight: 'bold',
+    marginLeft: Theme.spacing.md,
+  },
+  tokenSymbol: {
+    fontWeight: '500',
+    opacity: 0.8,
+  },
+  blockchainInfo: {
+    fontSize: Theme.typography.sizes.xs,
+  },
+  smallRefreshButton: {
+    paddingVertical: Theme.spacing.xs,
+    paddingHorizontal: Theme.spacing.sm,
+    borderRadius: Theme.borderRadius.sm,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  smallRefreshButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: Theme.typography.sizes.xs,
+  },
+  walletContainer: {
+    marginTop: Theme.spacing.md,
+  },
+  walletLabel: {
+    fontSize: Theme.typography.sizes.sm,
+  },
+  walletAddress: {
+    fontSize: Theme.typography.sizes.md,
+    fontWeight: 'bold',
+  },
+  lastUpdated: {
+    fontSize: Theme.typography.sizes.xs,
+    marginTop: Theme.spacing.xs,
   },
 }); 

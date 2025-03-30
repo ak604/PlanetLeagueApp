@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { TokenProvider } from './context/TokenContext';
 import LoadingScreen from './LoadingScreen';
 
 // Prevent the splash screen from auto-hiding
@@ -67,7 +68,9 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <RootLayoutNav />
+        <TokenProvider>
+          <RootLayoutNav />
+        </TokenProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );
