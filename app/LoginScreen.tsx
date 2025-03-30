@@ -3,10 +3,10 @@ import { StyleSheet, Alert, ActivityIndicator, TouchableOpacity, Platform, View,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-// Import the new library
+// Import the Google sign-in library
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 
-// Declare the global variable for TypeScript (still potentially needed for tests)
+// Declare the global variable for TypeScript (only needed for tests)
 declare global {
   var __TEST_API_URL__: string | undefined;
 }
@@ -14,18 +14,26 @@ declare global {
 // Determine if running in Jest test environment
 const isTest = process.env.JEST_WORKER_ID !== undefined;
 
-const LoginScreen = () => {
+export default function LoginScreen() {
   const router = useRouter();
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false); // Specific loading state
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   // Configure Google Sign-in on component mount
   useEffect(() => {
     console.log("[app/LoginScreen.tsx] Configuring Google Sign-in...");
-    console.log("[app/LoginScreen.tsx] Using Web Client ID (for native):", process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
     
+    // Configure with your Google web client ID
+    // The webClientId is required for both Android and iOS
     GoogleSignin.configure({
-      webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID, 
+      webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      // Add iOS client ID if you have one
+      iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+      // Ensure proper scopes for the data you need
+      scopes: ['profile', 'email'],
+      // Ensure proper offlineAccess setting
+      offlineAccess: true,
     });
+    
     console.log("[app/LoginScreen.tsx] Google Sign-in configured.");
   }, []);
 
@@ -44,11 +52,19 @@ const LoginScreen = () => {
     setIsGoogleLoading(true);
     try {
       console.log("[app/LoginScreen.tsx] Attempting Google Sign-in...");
+      
+      // Use proper format based on API version
+      // Make sure we're signed out first to avoid issues
+      await GoogleSignin.signOut();
       const userInfo = await GoogleSignin.signIn();
+      
       console.log("[app/LoginScreen.tsx] Google Sign-in Result:", userInfo);
 
-      if (userInfo.type === 'success' && userInfo.data?.idToken) {
-        const idToken = userInfo.data.idToken;
+      // Use type assertion to handle GoogleSignin response structure
+      // Different versions of the library might have different response structures
+      const response = userInfo as any;
+      if (response && response.idToken) {
+        const idToken = response.idToken;
         console.log("[app/LoginScreen.tsx] Successfully got idToken.");
 
         // --- Send idToken to your backend --- 
@@ -60,39 +76,35 @@ const LoginScreen = () => {
           if (!isTest) {
             Alert.alert('Configuration Error', errorMsg);
           }
-          throw new Error(errorMsg); // Re-throw to be caught by outer catch
+          throw new Error(errorMsg);
         }
         
         const apiUrl = `${baseUrl}/api/auth/google`;
 
-        const response = await fetch(apiUrl, {
+        const backendResponse = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ idToken }), // Send the correct idToken
+          body: JSON.stringify({ idToken }),
         });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ message: response.statusText })); // Graceful handling if response not json
-          throw new Error(`Backend auth failed: ${errorData.message || response.statusText}`);
+        if (!backendResponse.ok) {
+          const errorData = await backendResponse.json().catch(() => ({ message: backendResponse.statusText }));
+          throw new Error(`Backend auth failed: ${errorData.message || backendResponse.statusText}`);
         }
 
         console.log('[app/LoginScreen.tsx] Backend Auth Successful');
-        router.replace('/(tabs)'); // Navigate after successful backend auth
-
-      } else if (userInfo.type === 'cancelled') {
-        console.log("[app/LoginScreen.tsx] Sign-in cancelled (explicit check).");
-        Alert.alert('Cancelled', 'You cancelled the sign-in process.');
-
+        router.replace('/(tabs)');
       } else {
         console.error("[app/LoginScreen.tsx] Sign-in failed or idToken missing:", userInfo);
-        throw new Error('Google Sign-in failed: No ID token received or sign-in was not successful.');
+        throw new Error('Google Sign-in failed: No ID token received.');
       }
 
     } catch (error: any) {
       console.error("[app/LoginScreen.tsx] Sign-in Error:", error, "Code:", error.code);
+      
       // Handle specific Google Sign-In errors
       if (error.code === statusCodes.SIGN_IN_CANCELLED) {
         Alert.alert('Cancelled', 'Sign-in process was cancelled.');
@@ -120,7 +132,7 @@ const LoginScreen = () => {
           <ActivityIndicator size="large" color="#0000ff" />
         ) : (
           <TouchableOpacity
-            style={styles.signInButton} // Reuse existing style name
+            style={styles.signInButton}
             onPress={handleGoogleSignIn} 
             disabled={isGoogleLoading} 
           >
@@ -130,7 +142,7 @@ const LoginScreen = () => {
       </View>
     </SafeAreaView>
   );
-};
+}
 
 // Combine and reuse styles
 const styles = StyleSheet.create({
@@ -162,7 +174,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     textAlign: 'center',
   },
-  signInButton: { // Renamed from googleButton for clarity if needed, reusing original style
+  signInButton: {
     backgroundColor: '#4285F4',
     paddingVertical: 12,
     paddingHorizontal: 30,
@@ -177,6 +189,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16, 
   }
-});
-
-export default LoginScreen; 
+}); 
