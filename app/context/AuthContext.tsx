@@ -29,6 +29,8 @@ interface AuthContextData extends AuthState {
   signIn: (idToken: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  setDummyUser: () => Promise<void>;
+  signUpWithEmail: (email: string, password: string) => Promise<void>;
 }
 
 // Create the auth context with default values
@@ -40,6 +42,8 @@ const AuthContext = createContext<AuthContextData>({
   signIn: async () => {},
   signOut: async () => {},
   refreshUser: async () => {},
+  setDummyUser: async () => {},
+  signUpWithEmail: async () => {},
 });
 
 // Storage keys
@@ -148,13 +152,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           photo: data.user.photo,
         };
         
-        await SecureStore.setItemAsync(TOKEN_KEY, idToken);
+        // Use a consistent token value - the received idToken itself
+        const userToken = idToken;
+        await SecureStore.setItemAsync(TOKEN_KEY, userToken);
         await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
         
         setState({
           isLoading: false,
           isSignout: false,
-          userToken: idToken,
+          userToken: userToken, // Use the consistent token
           user,
         });
       } catch (error: any) {
@@ -192,6 +198,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!isTest) {
            Alert.alert('Error', 'Failed to sign out. Please try again.');
         }
+        // Ensure loading state is reset even on error
+        setState(prev => ({ ...prev, isLoading: false, isSignout: true, userToken: null, user: null }));
       }
     },
     
@@ -211,8 +219,172 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         console.error('Failed to refresh user data:', error);
+        // Consider signing the user out if refresh fails
+        // await authActions.signOut();
       }
     },
+
+    signUpWithEmail: async (email: string, password: string) => {
+      console.log("[AuthContext] Attempting email/password signup...");
+      setState(prev => ({ ...prev, isLoading: true }));
+
+      try {
+        // Determine base URL based on environment
+        const baseUrl = isTest ? __TEST_API_URL__ : process.env.EXPO_PUBLIC_PL_BASE_URL;
+        if (!baseUrl) {
+          console.error('API Base URL is not configured for email signup.');
+          if (!isTest) {
+            Alert.alert('Configuration Error', 'Cannot sign up: API configuration missing.');
+          }
+          setState(prev => ({ ...prev, isLoading: false }));
+          return;
+        }
+
+        const apiUrl = `${baseUrl}/api/auth/signup`;
+        console.log(`[AuthContext] Sending signup request to: ${apiUrl}`);
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password }),
+        });
+
+        if (!response.ok) {
+          let errorMsg = 'Signup failed';
+          try {
+            const errorData = await response.json();
+            errorMsg = errorData.message || `HTTP error! Status: ${response.status}`;
+          } catch (e) { /* Ignore JSON parse error */ }
+          throw new Error(errorMsg);
+        }
+
+        const data = await response.json();
+
+        // Validate response contains required data
+        if (!data || !data.token || !data.user || !data.user.userId) {
+          console.error("[AuthContext] Backend response missing required fields:", data);
+          throw new Error("Invalid data received from backend during signup.");
+        }
+
+        // Construct user object from response
+        const user: User = {
+          id: data.user.userId,
+          email: data.user.email,
+          name: data.user.email.split('@')[0], // Use part of email as name if not provided
+          photo: undefined, // No photo for email signup
+        };
+
+        // Store the auth token and user data
+        await SecureStore.setItemAsync(TOKEN_KEY, data.token);
+        await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+
+        console.log("[AuthContext] Email signup successful. User:", user);
+
+        setState({
+          isLoading: false,
+          isSignout: false,
+          userToken: data.token,
+          user: user,
+        });
+      } catch (error: any) {
+        console.error('Email signup error:', error);
+        if (!isTest) {
+          Alert.alert(
+            'Signup Error',
+            error.message || 'Failed to sign up. Please try again later.'
+          );
+        }
+        setState(prev => ({ ...prev, isLoading: false }));
+      }
+    },
+
+    // Add the dummy user logic
+    setDummyUser: async () => {
+      console.log("[AuthContext] Attempting dummy backend sign-in for Expo Go...");
+      setState(prev => ({ ...prev, isLoading: true })); // Start loading
+
+      const dummyIdentifier = "expo-go-user-identifier"; // Consistent identifier for backend
+
+      try {
+        // Determine base URL based on environment
+        const isTest = process.env.JEST_WORKER_ID !== undefined;
+        const baseUrl = isTest ? __TEST_API_URL__ : process.env.EXPO_PUBLIC_PL_BASE_URL;
+        if (!baseUrl) {
+          console.error('API Base URL is not configured for dummy login.');
+          if (!isTest) {
+            Alert.alert('Configuration Error', 'Cannot perform dummy sign in: API configuration missing.');
+          }
+          throw new Error('API Base URL not configured'); 
+        }
+        // Use the same endpoint, assuming backend handles the dummyIdentifier
+        const apiUrl = `${baseUrl}/api/auth/google`; 
+
+        console.log(`[AuthContext] Sending dummy identifier to: ${apiUrl}`);
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          // Send a specific payload indicating a dummy request
+          body: JSON.stringify({ dummyIdentifier: dummyIdentifier }), 
+        });
+
+        if (!response.ok) {
+          let errorMsg = 'Dummy authentication failed';
+          try {
+            const errorData = await response.json();
+            errorMsg = errorData.message || `HTTP error! Status: ${response.status}`;
+          } catch (e) { /* Ignore JSON parse error */ }
+          throw new Error(errorMsg);
+        }
+
+        const data = await response.json();
+
+        // Ensure backend returned expected user structure
+        if (!data || !data.user || !data.user.id) {
+            console.error("[AuthContext] Backend response for dummy user missing required fields:", data);
+            throw new Error("Invalid user data received from backend for dummy user.");
+        }
+
+        // Get the REAL user details (including backend ID) from the response
+        const user: User = {
+          id: data.user.id, 
+          email: data.user.email,
+          name: data.user.name,
+          photo: data.user.photo,
+        };
+
+        // Use a dummy token locally, but store the real user from backend
+        const dummyToken = "dummy-token-for-expo-go"; 
+        await SecureStore.setItemAsync(TOKEN_KEY, dummyToken);
+        await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+
+        console.log("[AuthContext] Dummy backend sign-in successful. User:", user);
+
+        setState({
+          isLoading: false,
+          isSignout: false,
+          userToken: dummyToken,
+          user: user, // Store the user received from backend
+        });
+
+      } catch (error: any) {
+        console.error('Dummy sign in error:', error);
+        if (!isTest) {
+          Alert.alert(
+            'Dummy Sign In Error',
+            error.message || 'Failed to sign in dummy user. Please check backend.'
+          );
+        }
+        // Ensure state is reset on error
+        setState(prev => ({ ...prev, isLoading: false, userToken: null, user: null }));
+      }
+    }
   };
 
   // Combined context value
