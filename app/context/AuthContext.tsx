@@ -16,12 +16,22 @@ export interface User {
   photo?: string;
 }
 
+// Game data interface
+export interface GameData {
+  createdAt: string;
+  userId: string;
+  updatedAt: string;
+  walletAddress: string;
+}
+
 // Auth state interface
 interface AuthState {
   isLoading: boolean;
   isSignout: boolean;
   userToken: string | null;
   user: User | null;
+  gameData: GameData | null;
+  isGameDataLoading: boolean;
 }
 
 // Auth context interface
@@ -31,6 +41,7 @@ interface AuthContextData extends AuthState {
   refreshUser: () => Promise<void>;
   setDummyUser: () => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
+  loadGameData: () => Promise<void>;
 }
 
 // Create the auth context with default values
@@ -39,16 +50,20 @@ const AuthContext = createContext<AuthContextData>({
   isSignout: false,
   userToken: null,
   user: null,
+  gameData: null,
+  isGameDataLoading: false,
   signIn: async () => {},
   signOut: async () => {},
   refreshUser: async () => {},
   setDummyUser: async () => {},
   signUpWithEmail: async () => {},
+  loadGameData: async () => {},
 });
 
 // Storage keys
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
+const GAME_DATA_KEY = 'game_data';
 
 // REMOVE module-level API_URL constant
 // const API_URL = 'http://localhost:3000/api/auth/google';
@@ -60,6 +75,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isSignout: false,
     userToken: null,
     user: null,
+    gameData: null,
+    isGameDataLoading: false,
   });
 
   // Determine if running in Jest test environment
@@ -70,14 +87,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const bootstrapAsync = async () => {
       let userToken: string | null = null;
       let user: User | null = null;
+      let gameData: GameData | null = null;
 
       try {
         // Get stored token and user data
         userToken = await SecureStore.getItemAsync(TOKEN_KEY);
         const userJson = await SecureStore.getItemAsync(USER_KEY);
+        const gameDataJson = await SecureStore.getItemAsync(GAME_DATA_KEY);
         
         if (userJson) {
           user = JSON.parse(userJson);
+        }
+        
+        if (gameDataJson) {
+          gameData = JSON.parse(gameDataJson);
         }
         
         // Validate token with backend (optional for stronger security)
@@ -100,11 +123,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading: false,
         userToken,
         user,
+        gameData,
       }));
     };
 
     bootstrapAsync();
   }, [isTest]);
+
+  // Add an effect to automatically load game data when user is authenticated
+  useEffect(() => {
+    const loadDataIfAuthenticated = async () => {
+      // Only load game data if user is logged in and game data is not already loaded
+      if (state.user && !state.gameData && !state.isGameDataLoading) {
+        await authActions.loadGameData();
+      }
+    };
+    
+    loadDataIfAuthenticated();
+  }, [state.user]);
 
   // Auth actions
   const authActions = {
@@ -162,7 +198,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isSignout: false,
           userToken: userToken, // Use the consistent token
           user,
+          gameData: null,
+          isGameDataLoading: false,
         });
+        
+        // Load game data after successful sign in
+        await authActions.loadGameData();
       } catch (error: any) {
         console.error('Sign in error:', error);
          // Only Alert if not in test
@@ -184,6 +225,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Clear stored credentials
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         await SecureStore.deleteItemAsync(USER_KEY);
+        await SecureStore.deleteItemAsync(GAME_DATA_KEY);
         
         // Update state
         setState({
@@ -191,6 +233,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isSignout: true,
           userToken: null,
           user: null,
+          gameData: null,
+          isGameDataLoading: false,
         });
       } catch (error) {
         console.error('Sign out error:', error);
@@ -199,7 +243,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
            Alert.alert('Error', 'Failed to sign out. Please try again.');
         }
         // Ensure loading state is reset even on error
-        setState(prev => ({ ...prev, isLoading: false, isSignout: true, userToken: null, user: null }));
+        setState(prev => ({ 
+          ...prev, 
+          isLoading: false, 
+          isSignout: true, 
+          userToken: null, 
+          user: null,
+          gameData: null,
+          isGameDataLoading: false,
+        }));
       }
     },
     
@@ -288,6 +340,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isSignout: false,
           userToken: data.token,
           user: user,
+          gameData: null,
+          isGameDataLoading: false,
         });
       } catch (error: any) {
         console.error('Email signup error:', error);
@@ -371,6 +425,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isSignout: false,
           userToken: dummyToken,
           user: user, // Store the user received from backend
+          gameData: null,
+          isGameDataLoading: false,
         });
 
       } catch (error: any) {
@@ -382,7 +438,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           );
         }
         // Ensure state is reset on error
-        setState(prev => ({ ...prev, isLoading: false, userToken: null, user: null }));
+        setState(prev => ({ ...prev, isLoading: false, userToken: null, user: null, gameData: null, isGameDataLoading: false }));
+      }
+    },
+
+    // Add loadGameData function
+    loadGameData: async () => {
+      if (!state.user?.id) {
+        console.error('[AuthContext] Cannot load game data: No user ID available');
+        return;
+      }
+
+      setState(prev => ({ ...prev, isGameDataLoading: true }));
+      
+      try {
+        const baseUrl = isTest ? __TEST_API_URL__ : process.env.EXPO_PUBLIC_PL_BASE_URL;
+        if (!baseUrl) {
+          console.error('API Base URL is not configured for loading game data.');
+          setState(prev => ({ ...prev, isGameDataLoading: false }));
+          return;
+        }
+
+        const apiUrl = `${baseUrl}/api/app/load?userId=${state.user.id}`;
+        console.log(`[AuthContext] Loading game data from: ${apiUrl}`);
+
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${state.userToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          let errorMsg = 'Failed to load game data';
+          try {
+            const errorData = await response.json();
+            errorMsg = errorData.message || `HTTP error! Status: ${response.status}`;
+          } catch (e) { /* Ignore JSON parse error */ }
+          throw new Error(errorMsg);
+        }
+
+        const responseData = await response.json();
+        
+        if (!responseData.status || responseData.status !== 'success' || !responseData.data) {
+          console.error('[AuthContext] Invalid game data response:', responseData);
+          throw new Error('Invalid game data response structure');
+        }
+
+        const gameData: GameData = responseData.data;
+        
+        // Store game data in secure storage for persistence
+        await SecureStore.setItemAsync(GAME_DATA_KEY, JSON.stringify(gameData));
+        
+        // Update state with game data
+        setState(prev => ({
+          ...prev,
+          gameData,
+          isGameDataLoading: false,
+        }));
+        
+        console.log('[AuthContext] Game data loaded successfully:', gameData);
+      } catch (error) {
+        console.error('[AuthContext] Error loading game data:', error);
+        setState(prev => ({ ...prev, isGameDataLoading: false }));
+        
+        if (!isTest) {
+          Alert.alert(
+            'Game Data Error',
+            'Could not load your game data. Please try again later.'
+          );
+        }
       }
     }
   };
@@ -404,4 +530,4 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useAuth = () => useContext(AuthContext);
 
 // Default export for Expo Router
-export default AuthProvider; 
+export default AuthProvider;
