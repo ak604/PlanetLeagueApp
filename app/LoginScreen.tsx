@@ -1,10 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Alert, ActivityIndicator, TouchableOpacity, Platform, View, Text } from 'react-native';
+import { 
+  StyleSheet, 
+  Alert, 
+  ActivityIndicator, 
+  TouchableOpacity, 
+  Platform, 
+  View, 
+  Text,
+  ImageBackground,
+  KeyboardAvoidingView
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // Import the Google sign-in library
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+
+// Import theme and components
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { Colors } from '@/constants/Colors';
+import { Theme } from '@/constants/Theme';
+import { PlanetLeagueLogo } from './components/ui/PlanetLeagueLogo';
 
 // Declare the global variable for TypeScript (only needed for tests)
 declare global {
@@ -16,6 +33,8 @@ const isTest = process.env.JEST_WORKER_ID !== undefined;
 
 export default function LoginScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   // Configure Google Sign-in on component mount
@@ -123,70 +142,110 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.logoPlaceholder}>PlanetLeagueApp</Text>
-        <Text style={styles.title}>Welcome!</Text>
-        <Text style={styles.subtitle}>Sign in to continue</Text>
-        
-        {isGoogleLoading ? (
-          <ActivityIndicator size="large" color="#0000ff" />
-        ) : (
-          <TouchableOpacity
-            style={styles.signInButton}
-            onPress={handleGoogleSignIn} 
-            disabled={isGoogleLoading} 
-          >
-            <Text style={styles.buttonText}>Sign in with Google</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <LinearGradient
+        colors={colorScheme === 'dark' 
+          ? ['#202124', '#303134']
+          : ['#f8f9fa', '#ffffff']}
+        style={styles.gradient}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.content}
+        >
+          <View style={styles.logoContainer}>
+            <PlanetLeagueLogo size={120} withText={true} />
+          </View>
+          
+          <Text style={[styles.title, { color: colors.text }]}>
+            Welcome to Planet League
+          </Text>
+          
+          <Text style={[styles.subtitle, { color: colors.subtext }]}>
+            Play games, collect NFTs, and compete in tournaments
+          </Text>
+          
+          {isGoogleLoading ? (
+            <ActivityIndicator 
+              size="large" 
+              color={colors.primary} 
+              style={styles.loading}
+            />
+          ) : (
+            <TouchableOpacity
+              style={[styles.signInButton, { backgroundColor: colors.primary }]}
+              onPress={handleGoogleSignIn} 
+              disabled={isGoogleLoading}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.buttonText}>Sign in with Google</Text>
+            </TouchableOpacity>
+          )}
+          
+          <View style={styles.footer}>
+            <Text style={[styles.footerText, { color: colors.subtext }]}>
+              By signing in, you agree to our Terms of Service and Privacy Policy
+            </Text>
+          </View>
+        </KeyboardAvoidingView>
+      </LinearGradient>
     </SafeAreaView>
   );
 }
 
-// Combine and reuse styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0', 
+  },
+  gradient: {
+    flex: 1,
   },
   content: {
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  logoPlaceholder: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#333',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 40,
-    textAlign: 'center',
-  },
-  signInButton: {
-    backgroundColor: '#4285F4',
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 5,
-    minWidth: 200,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48, 
+    paddingHorizontal: Theme.spacing.lg,
+  },
+  logoContainer: {
+    marginBottom: Theme.spacing.xl,
+  },
+  title: {
+    fontSize: Theme.typography.sizes.xxl,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: Theme.spacing.sm,
+  },
+  subtitle: {
+    fontSize: Theme.typography.sizes.md,
+    textAlign: 'center',
+    marginBottom: Theme.spacing.xl,
+    paddingHorizontal: Theme.spacing.lg,
+  },
+  loading: {
+    marginVertical: Theme.spacing.xl,
+  },
+  signInButton: {
+    width: '100%',
+    maxWidth: 300,
+    paddingVertical: Theme.spacing.md,
+    paddingHorizontal: Theme.spacing.lg,
+    borderRadius: Theme.borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Theme.spacing.md,
+    ...Theme.shadows.md,
   },
   buttonText: {
-    color: 'white',
+    color: '#FFFFFF',
     fontWeight: 'bold',
-    fontSize: 16, 
-  }
+    fontSize: Theme.typography.sizes.md,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: Theme.spacing.xl,
+    paddingHorizontal: Theme.spacing.lg,
+  },
+  footerText: {
+    fontSize: Theme.typography.sizes.xs,
+    textAlign: 'center',
+  },
 }); 

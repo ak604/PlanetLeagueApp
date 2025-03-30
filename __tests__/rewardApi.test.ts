@@ -7,9 +7,8 @@ jest.spyOn(Alert, 'alert');
 // Mock fetch API
 global.fetch = jest.fn();
 
-// REMOVE Environment variable setting from here
-// const MOCK_BASE_URL = 'http://mock-api.com';
-// process.env.EXPO_PUBLIC_PL_BASE_URL = MOCK_BASE_URL;
+// Define the test API URL
+global.__TEST_API_URL__ = 'http://mock-api.com';
 
 describe('rewardUser utility', () => {
   // REMOVE Env var setup/teardown from here
@@ -29,7 +28,7 @@ describe('rewardUser utility', () => {
     const amount = 10;
     const userId = 'user123';
     // Use the __TEST_API_URL__ global and the correct path
-    const expectedUrl = `${__TEST_API_URL__}/api/rewards/grant`;
+    const expectedUrl = `${global.__TEST_API_URL__}/api/rewards/grant`;
     const expectedBody = JSON.stringify({ amount, userId });
 
     (fetch as jest.Mock).mockResolvedValueOnce({

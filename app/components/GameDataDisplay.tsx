@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, TouchableOpacity, Text, Platform } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { Colors } from '@/constants/Colors';
+import { Theme } from '@/constants/Theme';
 
 /**
  * Component to display user's game data
@@ -10,114 +11,163 @@ import { ThemedView } from '@/components/ThemedView';
  */
 export default function GameDataDisplay() {
   const { gameData, isGameDataLoading, user, loadGameData } = useAuth();
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
 
   // If data is loading, show a loading indicator
   if (isGameDataLoading) {
     return (
-      <ThemedView style={styles.container}>
-        <ActivityIndicator size="large" color="#0000ff" />
-        <ThemedText style={styles.text}>Loading game data...</ThemedText>
-      </ThemedView>
+      <View style={[styles.container, { backgroundColor: colors.card }]}>
+        <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+        <Text style={[styles.text, { color: colors.text }]}>Loading game data...</Text>
+      </View>
     );
   }
 
   // If no data but we have a user, show error with refresh button
   if (!gameData && user) {
     return (
-      <ThemedView style={styles.container}>
-        <ThemedText style={styles.errorText}>
+      <View style={[styles.container, { backgroundColor: colors.card }]}>
+        <Text style={[styles.errorText, { color: colors.error }]}>
           Could not load game data
-        </ThemedText>
-        <View style={styles.button} onTouchEnd={loadGameData}>
-          <ThemedText style={styles.buttonText}>Retry</ThemedText>
-        </View>
-      </ThemedView>
+        </Text>
+        <TouchableOpacity 
+          style={[styles.button, { backgroundColor: colors.primary }]} 
+          onPress={loadGameData}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.buttonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
   // If we have game data, display it
   if (gameData) {
     return (
-      <ThemedView style={styles.container}>
-        <ThemedText style={styles.title}>Your Game Data</ThemedText>
+      <View style={[styles.container, { backgroundColor: colors.card }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Your Game Data</Text>
         
-        <View style={styles.dataRow}>
-          <ThemedText style={styles.label}>User ID:</ThemedText>
-          <ThemedText style={styles.value}>{gameData.userId}</ThemedText>
+        <View style={[styles.dataRow, { borderBottomColor: colors.divider }]}>
+          <Text style={[styles.label, { color: colors.subtext }]}>User ID:</Text>
+          <Text style={[styles.value, { color: colors.text }]}>{gameData.userId}</Text>
         </View>
         
-        <View style={styles.dataRow}>
-          <ThemedText style={styles.label}>Wallet:</ThemedText>
-          <ThemedText style={styles.value}>{gameData.walletAddress}</ThemedText>
+        <View style={[styles.dataRow, { borderBottomColor: colors.divider }]}>
+          <Text style={[styles.label, { color: colors.subtext }]}>Wallet:</Text>
+          <Text 
+            style={[styles.value, styles.walletText, { color: colors.primary }]}
+            numberOfLines={1}
+            ellipsizeMode="middle"
+          >
+            {gameData.walletAddress}
+          </Text>
         </View>
         
-        <View style={styles.dataRow}>
-          <ThemedText style={styles.label}>Created:</ThemedText>
-          <ThemedText style={styles.value}>
+        <View style={[styles.dataRow, { borderBottomColor: colors.divider }]}>
+          <Text style={[styles.label, { color: colors.subtext }]}>Created:</Text>
+          <Text style={[styles.value, { color: colors.text }]}>
             {new Date(gameData.createdAt).toLocaleString()}
-          </ThemedText>
+          </Text>
         </View>
         
         <View style={styles.dataRow}>
-          <ThemedText style={styles.label}>Updated:</ThemedText>
-          <ThemedText style={styles.value}>
+          <Text style={[styles.label, { color: colors.subtext }]}>Updated:</Text>
+          <Text style={[styles.value, { color: colors.text }]}>
             {new Date(gameData.updatedAt).toLocaleString()}
-          </ThemedText>
+          </Text>
         </View>
-      </ThemedView>
+        
+        <TouchableOpacity 
+          style={[styles.refreshButton, { borderColor: colors.primary }]} 
+          onPress={loadGameData}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.refreshButtonText, { color: colors.primary }]}>Refresh Data</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
   // Default: No user or data yet
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText style={styles.text}>Sign in to view your game data</ThemedText>
-    </ThemedView>
+    <View style={[styles.container, { backgroundColor: colors.card }]}>
+      <Text style={[styles.text, { color: colors.text }]}>Sign in to view your game data</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    borderRadius: 8,
-    margin: 16,
-    alignItems: 'center',
+    padding: Theme.spacing.lg,
+    borderRadius: Theme.borderRadius.md,
+    margin: Theme.spacing.md,
+    ...Theme.shadows.md,
+  },
+  loader: {
+    marginBottom: Theme.spacing.md,
   },
   title: {
-    fontSize: 18,
+    fontSize: Theme.typography.sizes.lg,
     fontWeight: 'bold',
-    marginBottom: 16,
+    marginBottom: Theme.spacing.md,
+    textAlign: 'center',
   },
   text: {
-    marginTop: 8,
+    fontSize: Theme.typography.sizes.md,
+    marginTop: Theme.spacing.sm,
     textAlign: 'center',
   },
   errorText: {
-    color: 'red',
-    marginBottom: 16,
+    fontSize: Theme.typography.sizes.md,
+    fontWeight: '500',
+    marginBottom: Theme.spacing.md,
+    textAlign: 'center',
   },
   dataRow: {
     flexDirection: 'row',
-    marginBottom: 12,
-    alignItems: 'center',
-    width: '100%',
+    marginBottom: Theme.spacing.md,
+    paddingBottom: Theme.spacing.sm,
+    borderBottomWidth: 1,
   },
   label: {
+    fontSize: Theme.typography.sizes.md,
     fontWeight: 'bold',
     width: '30%',
   },
   value: {
     flex: 1,
-    fontSize: 14,
+    fontSize: Theme.typography.sizes.md,
+  },
+  walletText: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: Theme.typography.sizes.sm,
   },
   button: {
-    backgroundColor: '#4285F4',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 4,
+    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.md,
+    borderRadius: Theme.borderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Theme.spacing.md,
   },
   buttonText: {
-    color: 'white',
+    color: '#FFFFFF',
+    fontSize: Theme.typography.sizes.md,
     fontWeight: 'bold',
+  },
+  refreshButton: {
+    borderWidth: 1,
+    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.md,
+    borderRadius: Theme.borderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Theme.spacing.lg,
+    alignSelf: 'center',
+  },
+  refreshButtonText: {
+    fontSize: Theme.typography.sizes.sm,
+    fontWeight: '500',
   }
 }); 

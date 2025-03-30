@@ -69,8 +69,8 @@ if (process.env.JEST_WORKER_ID !== undefined) {
       const retryButton = getByText('Retry');
       expect(retryButton).toBeTruthy();
       
-      // Test retry functionality - Use onTouchEnd handler as specified in the component
-      fireEvent(retryButton, 'onTouchEnd');
+      // Use onPress instead of onTouchEnd since we've updated the component
+      fireEvent.press(retryButton);
       expect(loadGameDataMock).toHaveBeenCalledTimes(1);
     });
   

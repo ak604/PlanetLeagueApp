@@ -1,17 +1,33 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, FlatList } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, FlatList, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
-import { ScrollView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import NFTCard from '../components/NFTCard';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { Colors } from '@/constants/Colors';
+import { Theme } from '@/constants/Theme';
+import { LoadingScreen } from '../components/LoadingScreen';
+
+// Define types for NFTs
+type NFTRarity = 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary';
+
+interface NFT {
+  id: string;
+  name: string;
+  rarity: NFTRarity;
+  equipped: boolean;
+  image: any; // Using any for simplicity, but ideally would be more specific
+}
 
 // Mock NFT data
-const MOCK_NFTS = [
-  { id: 'nft1', name: 'Cosmic Helmet', rarity: 'Rare', equipped: true, image: 'https://placehold.co/200x200/4285F4/FFFFFF?text=Helmet' },
-  { id: 'nft2', name: 'Space Gloves', rarity: 'Uncommon', equipped: false, image: 'https://placehold.co/200x200/34A853/FFFFFF?text=Gloves' },
-  { id: 'nft3', name: 'Nebula Shield', rarity: 'Epic', equipped: false, image: 'https://placehold.co/200x200/EA4335/FFFFFF?text=Shield' },
-  { id: 'nft4', name: 'Star Boots', rarity: 'Common', equipped: false, image: 'https://placehold.co/200x200/FBBC05/FFFFFF?text=Boots' },
+const MOCK_NFTS: NFT[] = [
+  { id: 'nft1', name: 'Cosmic Helmet', rarity: 'Rare', equipped: true, image: require('../../assets/images/nfts/cosmic-helmet.png') },
+  { id: 'nft2', name: 'Space Gloves', rarity: 'Uncommon', equipped: false, image: require('../../assets/images/nfts/space-gloves.png') },
+  { id: 'nft3', name: 'Nebula Shield', rarity: 'Epic', equipped: false, image: { uri: 'https://placehold.co/400x400/9C27B0/FFFFFF?text=Nebula+Shield' } },
+  { id: 'nft4', name: 'Star Boots', rarity: 'Common', equipped: false, image: { uri: 'https://placehold.co/400x400/FBBC05/FFFFFF?text=Star+Boots' } },
 ];
 
 // Mock game history data
@@ -24,437 +40,494 @@ const GAME_HISTORY = [
 ];
 
 export default function ProfileScreen() {
-  const { user, signOut, isLoading } = useAuth();
+  const { user, signOut, isLoading: authLoading } = useAuth();
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
   const [activeTab, setActiveTab] = useState('stats'); // 'stats', 'nfts', or 'history'
-  const [nfts, setNfts] = useState(MOCK_NFTS);
+  const [nfts, setNfts] = useState<NFT[]>(MOCK_NFTS);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState('Loading profile data...');
+
+  // Function to simulate loading data with progress updates
+  const loadUserData = async () => {
+    setIsLoading(true);
+    setLoadingProgress(0);
+    setLoadingMessage('Connecting to server...');
+    
+    try {
+      // Simulate API connection
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setLoadingProgress(0.2);
+      setLoadingMessage('Fetching profile data...');
+      
+      // Simulate profile data loading
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setLoadingProgress(0.5);
+      setLoadingMessage('Loading game history...');
+      
+      // Simulate game history loading
+      await new Promise(resolve => setTimeout(resolve, 700));
+      setLoadingProgress(0.7);
+      setLoadingMessage('Loading NFT collection...');
+      
+      // Simulate NFT data loading
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      setLoadingProgress(0.9);
+      setLoadingMessage('Finalizing...');
+      
+      // Simulate finalizing
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setLoadingProgress(1);
+      
+      // Wait a moment at 100% for visual feedback
+      await new Promise(resolve => setTimeout(resolve, 200));
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Load data when component mounts
+  useEffect(() => {
+    if (user) {
+      loadUserData();
+    }
+  }, [user]);
 
   const handleSignOut = () => {
     signOut();
   };
 
-  const handleEquipNFT = (nftId) => {
+  const handleEquipNFT = (nftId: string) => {
     setNfts(nfts.map(nft => ({
       ...nft,
       equipped: nft.id === nftId
     })));
   };
 
-  const handleSellNFT = (nftId) => {
+  const handleSellNFT = (nftId: string) => {
     // In a real app, this would open a confirmation dialog and call an API
     console.log(`Selling NFT ${nftId}`);
   };
 
+  const handleRefresh = () => {
+    loadUserData();
+  };
+
   const renderStatsTab = () => (
     <ScrollView style={styles.tabContent}>
-      <ThemedView style={styles.statsCard}>
-        <ThemedView style={styles.statItem}>
-          <ThemedText type="subtitle">Total $PLT Earned</ThemedText>
-          <ThemedText style={styles.statValue}>1,250</ThemedText>
-        </ThemedView>
+      <View style={[styles.statsCard, { backgroundColor: colors.card }]}>
+        <View style={styles.statItem}>
+          <Text style={[styles.statLabel, { color: colors.subtext }]}>Total $PLT Earned</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>1,250</Text>
+        </View>
         
-        <ThemedView style={styles.statItem}>
-          <ThemedText type="subtitle">NFTs Owned</ThemedText>
-          <ThemedText style={styles.statValue}>{nfts.length}</ThemedText>
-        </ThemedView>
+        <View style={styles.statItem}>
+          <Text style={[styles.statLabel, { color: colors.subtext }]}>NFTs Owned</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>{nfts.length}</Text>
+        </View>
         
-        <ThemedView style={styles.statItem}>
-          <ThemedText type="subtitle">Games Played</ThemedText>
-          <ThemedText style={styles.statValue}>{GAME_HISTORY.length}</ThemedText>
-        </ThemedView>
+        <View style={styles.statItem}>
+          <Text style={[styles.statLabel, { color: colors.subtext }]}>Games Played</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>{GAME_HISTORY.length}</Text>
+        </View>
         
-        <ThemedView style={styles.statItem}>
-          <ThemedText type="subtitle">Win Rate</ThemedText>
-          <ThemedText style={styles.statValue}>
+        <View style={styles.statItem}>
+          <Text style={[styles.statLabel, { color: colors.subtext }]}>Win Rate</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>
             {`${Math.round((GAME_HISTORY.filter(game => game.result === 'Won').length / GAME_HISTORY.length) * 100)}%`}
-          </ThemedText>
-        </ThemedView>
-      </ThemedView>
+          </Text>
+        </View>
+      </View>
       
-      <ThemedView style={styles.recentActivity}>
-        <ThemedText type="body" bold>Recent Activity</ThemedText>
+      <View style={styles.recentActivity}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Activity</Text>
         {GAME_HISTORY.slice(0, 3).map(game => (
-          <ThemedView key={game.id} style={styles.activityItem}>
-            <ThemedText>{game.game}</ThemedText>
-            <ThemedView style={styles.activityDetails}>
-              <ThemedText>{game.date}</ThemedText>
-              <ThemedText style={{ color: game.result === 'Won' ? '#34A853' : '#EA4335' }}>
+          <View key={game.id} style={[styles.activityItem, { borderBottomColor: colors.divider }]}>
+            <Text style={{ color: colors.text }}>{game.game}</Text>
+            <View style={styles.activityDetails}>
+              <Text style={{ color: colors.subtext }}>{game.date}</Text>
+              <Text style={{ 
+                color: game.result === 'Won' ? colors.success : colors.error,
+                fontWeight: 'bold' 
+              }}>
                 {game.result}
-              </ThemedText>
-            </ThemedView>
-          </ThemedView>
+              </Text>
+            </View>
+          </View>
         ))}
-      </ThemedView>
+      </View>
+      
+      <TouchableOpacity 
+        style={[styles.refreshButton, { backgroundColor: colors.primary }]}
+        onPress={handleRefresh}
+      >
+        <Text style={styles.refreshButtonText}>Refresh Data</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 
   const renderNFTsTab = () => (
     <View style={styles.tabContent}>
-      <ThemedText type="body" bold style={styles.sectionTitle}>Your NFT Collection</ThemedText>
+      <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: Theme.spacing.md }]}>
+        Your NFT Collection
+      </Text>
       <FlatList
         data={nfts}
         keyExtractor={(item) => item.id}
         numColumns={2}
         renderItem={({ item }) => (
-          <ThemedView style={styles.nftCard}>
-            <Image source={{ uri: item.image }} style={styles.nftImage} />
-            <ThemedText bold style={styles.nftName}>{item.name}</ThemedText>
-            <ThemedText style={styles.nftRarity}>{item.rarity}</ThemedText>
-            
-            <ThemedView style={styles.nftActions}>
-              <TouchableOpacity
-                style={[styles.nftButton, item.equipped ? styles.equippedButton : {}]}
-                onPress={() => handleEquipNFT(item.id)}
-              >
-                <ThemedText style={styles.nftButtonText}>
-                  {item.equipped ? 'Equipped' : 'Equip'}
-                </ThemedText>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.nftButton, styles.sellButton]}
-                onPress={() => handleSellNFT(item.id)}
-              >
-                <ThemedText style={styles.nftButtonText}>Sell</ThemedText>
-              </TouchableOpacity>
-            </ThemedView>
-          </ThemedView>
+          <NFTCard
+            id={item.id}
+            name={item.name}
+            rarity={item.rarity}
+            equipped={item.equipped}
+            image={item.image}
+            onEquip={handleEquipNFT}
+            onSell={handleSellNFT}
+          />
         )}
+        contentContainerStyle={styles.nftList}
       />
+      
+      <TouchableOpacity 
+        style={[styles.refreshButton, { backgroundColor: colors.primary, marginTop: Theme.spacing.lg }]}
+        onPress={handleRefresh}
+      >
+        <Text style={styles.refreshButtonText}>Refresh NFTs</Text>
+      </TouchableOpacity>
     </View>
   );
 
   const renderHistoryTab = () => (
     <View style={styles.tabContent}>
-      <ThemedText type="body" bold style={styles.sectionTitle}>Game History</ThemedText>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Game History</Text>
       <FlatList
         data={GAME_HISTORY}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <ThemedView style={styles.historyItem}>
-            <ThemedView>
-              <ThemedText bold>{item.game}</ThemedText>
-              <ThemedText>{item.date}</ThemedText>
-            </ThemedView>
-            <ThemedView style={styles.historyDetails}>
-              <ThemedText>{item.score} pts</ThemedText>
-              <ThemedText style={{ 
-                color: item.result === 'Won' ? '#34A853' : '#EA4335',
+          <View style={[styles.historyItem, { borderBottomColor: colors.divider }]}>
+            <View>
+              <Text style={[styles.historyGameName, { color: colors.text }]}>{item.game}</Text>
+              <Text style={[styles.historyDate, { color: colors.subtext }]}>{item.date}</Text>
+            </View>
+            <View style={styles.historyDetails}>
+              <Text style={[styles.historyScore, { color: colors.text }]}>{item.score} pts</Text>
+              <Text style={{ 
+                color: item.result === 'Won' ? colors.success : colors.error,
                 fontWeight: 'bold'
               }}>
                 {item.result}
-              </ThemedText>
-            </ThemedView>
-          </ThemedView>
+              </Text>
+            </View>
+          </View>
         )}
       />
+      
+      <TouchableOpacity 
+        style={[styles.refreshButton, { backgroundColor: colors.primary, marginTop: Theme.spacing.lg, alignSelf: 'center' }]}
+        onPress={handleRefresh}
+      >
+        <Text style={styles.refreshButtonText}>Refresh History</Text>
+      </TouchableOpacity>
     </View>
   );
 
   if (!user) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.content}>
-          <Text style={styles.errorText}>User information not available</Text>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: colors.error }]}>
+            User information not available
+          </Text>
+          <TouchableOpacity 
+            style={[styles.signOutButton, { backgroundColor: colors.primary }]} 
+            onPress={handleSignOut}
+          >
+            <Text style={styles.signOutButtonText}>Return to Login</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
-      </View>
-
-      <View style={styles.contentContainer}>
-        {/* User Avatar */}
-        <View style={styles.avatarContainer}>
-          {user.photo ? (
-            <Image source={{ uri: user.photo }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.placeholderAvatar]}>
-              <Text style={styles.avatarInitial}>{user.name?.charAt(0) || '?'}</Text>
-            </View>
-          )}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { borderBottomColor: colors.divider }]}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Profile</Text>
         </View>
 
-        {/* User Info */}
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
-        </View>
-
-        {/* Tab Navigation */}
-        <View style={styles.tabs}>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'stats' && styles.activeTab]} 
-            onPress={() => setActiveTab('stats')}
-          >
-            <Text style={[styles.tabText, activeTab === 'stats' && styles.activeTabText]}>Stats</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'nfts' && styles.activeTab]} 
-            onPress={() => setActiveTab('nfts')}
-          >
-            <Text style={[styles.tabText, activeTab === 'nfts' && styles.activeTabText]}>NFTs</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'history' && styles.activeTab]} 
-            onPress={() => setActiveTab('history')}
-          >
-            <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>History</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Tab Content */}
-        <View style={styles.tabContentContainer}>
-          {activeTab === 'stats' && renderStatsTab()}
-          {activeTab === 'nfts' && renderNFTsTab()}
-          {activeTab === 'history' && renderHistoryTab()}
-        </View>
-
-        {/* Actions */}
-        <View style={styles.actions}>
-          <TouchableOpacity 
-            style={styles.signOutButton} 
-            onPress={handleSignOut}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
+        <View style={styles.contentContainer}>
+          {/* User Avatar */}
+          <View style={styles.avatarContainer}>
+            {user.photo ? (
+              <Image source={{ uri: user.photo }} style={styles.avatar} />
             ) : (
-              <Text style={styles.signOutButtonText}>Sign Out</Text>
+              <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+                <Text style={styles.avatarInitial}>{user.name?.charAt(0) || '?'}</Text>
+              </View>
             )}
-          </TouchableOpacity>
+          </View>
+
+          {/* User Info */}
+          <View style={styles.userInfo}>
+            <Text style={[styles.userName, { color: colors.text }]}>{user.name}</Text>
+            <Text style={[styles.userEmail, { color: colors.subtext }]}>{user.email}</Text>
+          </View>
+
+          {/* Tab Navigation */}
+          <View style={[styles.tabs, { borderBottomColor: colors.divider }]}>
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'stats' && [styles.activeTab, { borderBottomColor: colors.primary }]]} 
+              onPress={() => setActiveTab('stats')}
+            >
+              <Text
+                style={[
+                  styles.tabText, 
+                  { color: activeTab === 'stats' ? colors.primary : colors.subtext }
+                ]}
+              >
+                Stats
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'nfts' && [styles.activeTab, { borderBottomColor: colors.primary }]]} 
+              onPress={() => setActiveTab('nfts')}
+            >
+              <Text
+                style={[
+                  styles.tabText, 
+                  { color: activeTab === 'nfts' ? colors.primary : colors.subtext }
+                ]}
+              >
+                NFTs
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'history' && [styles.activeTab, { borderBottomColor: colors.primary }]]} 
+              onPress={() => setActiveTab('history')}
+            >
+              <Text
+                style={[
+                  styles.tabText, 
+                  { color: activeTab === 'history' ? colors.primary : colors.subtext }
+                ]}
+              >
+                History
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Tab Content */}
+          <View style={styles.tabContentContainer}>
+            {activeTab === 'stats' && renderStatsTab()}
+            {activeTab === 'nfts' && renderNFTsTab()}
+            {activeTab === 'history' && renderHistoryTab()}
+          </View>
+
+          {/* Actions */}
+          <View style={styles.actions}>
+            <TouchableOpacity 
+              style={[styles.signOutButton, { backgroundColor: colors.primary }]} 
+              onPress={handleSignOut}
+              disabled={authLoading}
+            >
+              {authLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.signOutButtonText}>Sign Out</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </SafeAreaView>
+        
+        {/* Loading Screen Overlay */}
+        <LoadingScreen 
+          visible={isLoading} 
+          message={loadingMessage}
+          progress={loadingProgress}
+        />
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9f9f9',
   },
   contentContainer: {
     flex: 1,
-    alignItems: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
+    paddingVertical: Theme.spacing.md,
   },
-  tabContentContainer: {
+  errorContainer: {
     flex: 1,
-    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Theme.spacing.xl,
+  },
+  errorText: {
+    fontSize: Theme.typography.sizes.md,
+    marginBottom: Theme.spacing.lg,
+    textAlign: 'center',
   },
   header: {
-    padding: 16,
-    backgroundColor: '#fff',
+    paddingVertical: Theme.spacing.md,
+    paddingHorizontal: Theme.spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: Theme.typography.sizes.lg,
     fontWeight: 'bold',
-    color: '#333',
   },
   avatarContainer: {
-    marginBottom: 20,
+    alignItems: 'center',
+    marginTop: Theme.spacing.md,
   },
   avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-  },
-  placeholderAvatar: {
-    backgroundColor: '#4285F4',
-    alignItems: 'center',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   avatarInitial: {
-    fontSize: 48,
-    color: 'white',
+    fontSize: Theme.typography.sizes.xxl,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   userInfo: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginTop: Theme.spacing.sm,
+    marginBottom: Theme.spacing.md,
   },
   userName: {
-    fontSize: 24,
+    fontSize: Theme.typography.sizes.lg,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
   },
   userEmail: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: Theme.typography.sizes.sm,
+    marginTop: 4,
   },
   tabs: {
     flexDirection: 'row',
-    marginBottom: 16,
-    width: '100%',
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#eee',
+    borderBottomWidth: 1,
+    marginBottom: Theme.spacing.md,
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: Theme.spacing.md,
     alignItems: 'center',
-    backgroundColor: '#fff',
   },
   activeTab: {
-    backgroundColor: '#4285F4',
+    borderBottomWidth: 2,
   },
   tabText: {
+    fontSize: Theme.typography.sizes.md,
     fontWeight: '500',
-    color: '#333',
   },
-  activeTabText: {
-    color: '#fff',
+  tabContentContainer: {
+    flex: 1,
   },
   tabContent: {
-    width: '100%',
+    flex: 1,
+    paddingHorizontal: Theme.spacing.md,
   },
   statsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderRadius: Theme.borderRadius.md,
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
+    ...Theme.shadows.md,
   },
   statItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    paddingVertical: Theme.spacing.sm,
+  },
+  statLabel: {
+    fontSize: Theme.typography.sizes.md,
   },
   statValue: {
-    fontSize: 18,
+    fontSize: Theme.typography.sizes.md,
     fontWeight: 'bold',
-    color: '#4285F4',
+  },
+  sectionTitle: {
+    fontSize: Theme.typography.sizes.lg,
+    fontWeight: 'bold',
+    marginVertical: Theme.spacing.sm,
   },
   recentActivity: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 16,
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    marginTop: Theme.spacing.md,
   },
   activityItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: Theme.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   activityDetails: {
     alignItems: 'flex-end',
   },
-  sectionTitle: {
-    marginBottom: 12,
-  },
-  nftCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,
-    margin: 6,
-    width: '47%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  nftImage: {
-    width: '100%',
-    height: 120,
-    borderRadius: 4,
-    marginBottom: 8,
-  },
-  nftName: {
-    fontSize: 14,
-  },
-  nftRarity: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 8,
-  },
-  nftActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  nftButton: {
-    backgroundColor: '#4285F4',
-    borderRadius: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    flex: 1,
-    marginHorizontal: 2,
+  nftList: {
     alignItems: 'center',
-  },
-  equippedButton: {
-    backgroundColor: '#34A853',
-  },
-  sellButton: {
-    backgroundColor: '#EA4335',
-  },
-  nftButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
   },
   historyItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
+    paddingVertical: Theme.spacing.md,
+    borderBottomWidth: 1,
+  },
+  historyGameName: {
+    fontSize: Theme.typography.sizes.md,
+    fontWeight: 'bold',
+  },
+  historyDate: {
+    fontSize: Theme.typography.sizes.sm,
+    marginTop: 4,
+  },
+  historyScore: {
+    fontSize: Theme.typography.sizes.md,
+    marginBottom: 4,
+    textAlign: 'right',
   },
   historyDetails: {
     alignItems: 'flex-end',
   },
   actions: {
-    width: '100%',
-    marginTop: 24,
+    padding: Theme.spacing.md,
+    alignItems: 'center',
   },
   signOutButton: {
-    backgroundColor: '#f44336',
-    borderRadius: 8,
-    paddingVertical: 12,
+    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.lg,
+    borderRadius: Theme.borderRadius.sm,
+    minWidth: 150,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   signOutButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    color: '#FFFFFF',
     fontWeight: 'bold',
+    fontSize: Theme.typography.sizes.md,
   },
-  errorText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+  refreshButton: {
+    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.lg,
+    borderRadius: Theme.borderRadius.sm,
+    minWidth: 150,
+    alignItems: 'center',
+  },
+  refreshButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: Theme.typography.sizes.md,
   },
 }); 

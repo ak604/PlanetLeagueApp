@@ -31,6 +31,7 @@ jest.mock('@react-native-google-signin/google-signin', () => {
       configure: jest.fn(),
       hasPlayServices: jest.fn().mockResolvedValue(true),
       signIn: jest.fn(),
+      signOut: jest.fn().mockResolvedValue(null),
       // Add other methods if needed
     },
     GoogleSigninButton: MockGoogleSigninButton, // Use the enhanced mock component
@@ -47,8 +48,8 @@ jest.mock('@react-native-google-signin/google-signin', () => {
 // Mock expo-router
 const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
-  ...jest.requireActual('expo-router'), // Keep original implementations
-  useRouter: jest.fn(() => ({ // Mock useRouter specifically
+  // Don't try to use the actual implementation
+  useRouter: jest.fn(() => ({ 
     replace: mockReplace,
   })),
 }));
@@ -66,6 +67,13 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
+// Mock expo-linear-gradient
+jest.mock('expo-linear-gradient', () => ({
+  LinearGradient: jest.fn().mockImplementation(({ children }) => children)
+}));
+
+// Define the test API URL
+global.__TEST_API_URL__ = 'http://mock-api.com';
 
 // Mock Alert
 jest.spyOn(Alert, 'alert');
@@ -101,7 +109,7 @@ describe('LoginScreen', () => {
 
   it('renders correctly', () => {
     render(<LoginScreen />);
-    expect(screen.getByText(/Welcome!/i)).toBeTruthy();
+    expect(screen.getByText(/Welcome to Planet League/i)).toBeTruthy();
     expect(screen.getByText(/Sign in with Google/i)).toBeTruthy();
   });
 
@@ -121,7 +129,7 @@ describe('LoginScreen', () => {
     });
     await waitFor(() => {
         // Use the __TEST_API_URL__ global (available in Jest environment)
-        const expectedApiUrl = `${__TEST_API_URL__}/api/auth/google`;
+        const expectedApiUrl = `${global.__TEST_API_URL__}/api/auth/google`;
         expect(fetch).toHaveBeenCalledWith(expectedApiUrl, {
             method: 'POST',
             headers: {
@@ -132,7 +140,7 @@ describe('LoginScreen', () => {
         });
     });
     await waitFor(() => {
-      expect(jest.requireMock('expo-router').useRouter().replace).toHaveBeenCalledWith('/(tabs)');
+      expect(mockReplace).toHaveBeenCalledWith('/(tabs)');
     });
   });
 
@@ -152,10 +160,9 @@ describe('LoginScreen', () => {
     });
 
     // Check that navigation did NOT happen and no alert was shown for cancellation
-    expect(jest.requireMock('expo-router').useRouter().replace).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
-    expect(Alert.alert).not.toHaveBeenCalled();
-    // You could also spy on console.log if needed: jest.spyOn(console, 'log');
+    expect(Alert.alert).toHaveBeenCalledWith('Cancelled', 'Sign-in process was cancelled.');
   });
 
    it('handles Play Services not available error', async () => {
@@ -175,7 +182,7 @@ describe('LoginScreen', () => {
      });
 
      // Check that navigation did NOT happen and alert *was* shown
-     expect(jest.requireMock('expo-router').useRouter().replace).not.toHaveBeenCalled();
+     expect(mockReplace).not.toHaveBeenCalled();
      expect(fetch).not.toHaveBeenCalled();
      expect(Alert.alert).toHaveBeenCalledWith('Error', 'Google Play Services not available or outdated.');
    });
@@ -191,9 +198,9 @@ describe('LoginScreen', () => {
         expect(GoogleSignin.signIn).toHaveBeenCalledTimes(1);
      });
      expect(fetch).not.toHaveBeenCalled();
-     expect(jest.requireMock('expo-router').useRouter().replace).not.toHaveBeenCalled();
+     expect(mockReplace).not.toHaveBeenCalled();
      // Update the expected error message to match the code
-     expect(Alert.alert).toHaveBeenCalledWith('Sign In Error', 'Google Sign-in failed: No ID token received or sign-in was not successful.');
+     expect(Alert.alert).toHaveBeenCalledWith('Sign In Error', 'Google Sign-in failed: No ID token received.');
     });
 
    it('handles backend authentication failure', async () => {
@@ -223,7 +230,7 @@ describe('LoginScreen', () => {
      });
 
      // Check that navigation did NOT happen and alert *was* shown
-     expect(jest.requireMock('expo-router').useRouter().replace).not.toHaveBeenCalled();
+     expect(mockReplace).not.toHaveBeenCalled();
      expect(Alert.alert).toHaveBeenCalledWith('Sign In Error', 'Backend auth failed: Invalid token');
    });
 
@@ -242,9 +249,8 @@ describe('LoginScreen', () => {
      });
 
      // Check that navigation did NOT happen and alert *was* shown
-     expect(jest.requireMock('expo-router').useRouter().replace).not.toHaveBeenCalled();
+     expect(mockReplace).not.toHaveBeenCalled();
      expect(fetch).not.toHaveBeenCalled();
      expect(Alert.alert).toHaveBeenCalledWith('Sign In Error', 'Something went wrong');
    });
-
 }); 
