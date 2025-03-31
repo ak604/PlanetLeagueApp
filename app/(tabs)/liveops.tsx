@@ -125,7 +125,7 @@ export default function LiveOpsScreen() {
         {TOURNAMENT_LEADERBOARD.map(player => (
           <View key={player.id} style={styles.leaderboardRow}>
             <ThemedText style={styles.rankColumn}>{player.rank}</ThemedText>
-            <ThemedText style={styles.nameColumn}>{player.name}</ThemedText>
+            <ThemedText style={styles.nameColumn} numberOfLines={1} ellipsizeMode="tail">{player.name}</ThemedText>
             <ThemedText style={styles.scoreColumn}>{player.score}</ThemedText>
             <ThemedText style={styles.rewardColumn}>{player.reward} $PLT</ThemedText>
           </View>
@@ -286,30 +286,36 @@ const styles = StyleSheet.create({
   },
   leaderboardHeader: {
     flexDirection: 'row',
-    backgroundColor: '#EAEAEA',
     paddingVertical: 12,
-    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eaeaea',
+    marginBottom: 8,
   },
   leaderboardRow: {
     flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#EAEAEA',
+    borderBottomColor: '#f0f0f0',
   },
   rankColumn: {
     width: '15%',
     textAlign: 'center',
+    fontSize: 14,
   },
   nameColumn: {
     width: '40%',
+    paddingLeft: 8,
+    fontSize: 14,
   },
   scoreColumn: {
     width: '20%',
     textAlign: 'right',
+    fontSize: 14,
   },
   rewardColumn: {
     width: '25%',
     textAlign: 'right',
+    paddingRight: 8,
+    fontSize: 14,
   },
 }); 

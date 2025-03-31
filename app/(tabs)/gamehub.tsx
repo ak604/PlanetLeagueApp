@@ -1,73 +1,140 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link } from 'expo-router'; // Import Link for navigation
+import { Link, useRouter } from 'expo-router';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { Colors } from '@/constants/Colors';
+import { Theme } from '@/constants/Theme';
+import { useToken } from '../context/TokenContext';
+import { useAuth } from '../context/AuthContext';
 
 // Define Game type
 interface Game {
   id: string;
   name: string;
   description: string;
-  icon: string; // Placeholder for icon name or URL
-  gameUrl: string; // URL for the HTML5 game
+  icon: any; // Changed from string to any to support image requires
+  gameUrl: string;
+  highScore: number;
+  isLocal: boolean;
 }
 
-// Placeholder game data with sample game URLs
-// *** IMPORTANT: Replace these URLs with actual HTML5 game URLs ***
-const games: Game[] = [
+// Updated local game data with actual image assets
+const localGames: Game[] = [
   {
     id: '1',
-    name: 'Puzzle Mania',
-    description: 'Solve puzzles, earn $PLT',
-    icon: 'puzzlepiece.fill', // Example icon name
-    gameUrl: 'https://puzzles.example.com',
+    name: 'Cosmic Runner',
+    description: 'Dodge asteroids, run forever!',
+    icon: require('../../assets/games/runner.png'),
+    gameUrl: 'local://infiniterunner',
+    highScore: 0,
+    isLocal: true
   },
   {
     id: '2',
-    name: 'Trivia Time',
-    description: 'Answer questions, earn $PLT',
-    icon: 'questionmark.diamond.fill', // Example icon name
-    gameUrl: 'https://trivia.example.com',
+    name: 'Pattern Play',
+    description: 'Repeat the pattern to win PLT',
+    icon: require('../../assets/games/puzzle-1.png'),
+    gameUrl: 'local://puzzlegame',
+    highScore: 0,
+    isLocal: true
   },
   {
     id: '3',
-    name: '2048', // A common simple HTML5 game
-    description: 'Combine tiles, earn $PLT',
-    icon: 'squareshape.split.2x2', // Example icon name
-    gameUrl: 'https://play2048.co/', // Example public 2048 game
-  },
-  // Add more games as needed
+    name: 'Memo Match',
+    description: 'Match the pairs, test your memory',
+    icon: require('../../assets/games/memory-back.png'),
+    gameUrl: 'local://memorygame',
+    highScore: 0,
+    isLocal: true
+  }
 ];
 
-const numColumns = 2; // Adjust number of columns for the grid
+const numColumns = 2;
 const screenWidth = Dimensions.get('window').width;
-const itemWidth = screenWidth / numColumns - 30; // Calculate item width based on columns and padding
+const itemWidth = screenWidth / numColumns - 30;
 
 const GameHubScreen = () => {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  const { refreshBalance } = useToken();
+  const { user } = useAuth();
+  const [games, setGames] = useState<Game[]>(localGames);
+  const router = useRouter();
 
-  const renderGameItem = ({ item }: { item: Game }) => (
-    // Link to a generic game player screen, passing the URL and name
-    <Link 
-      href={{
-        pathname: "/gameplayer", // Route for the WebView screen (needs to be created)
-        params: { gameUrl: item.gameUrl, gameName: item.name } 
+  // Handle game completion (reward logic remains the same)
+  const handleGameComplete = async (gameId: string, score: number) => {
+    try {
+      // Award 10 PLT for completing the game
+      await refreshBalance(); 
+      
+      // Check if it's a high score
+      const gameIndex = games.findIndex(g => g.id === gameId);
+      if (gameIndex !== -1 && score > games[gameIndex].highScore) {
+        // Award additional 20 PLT for high score
+        await refreshBalance(); 
+        
+        // Update high score in state
+        setGames(prevGames => {
+          const newGames = [...prevGames];
+          newGames[gameIndex] = { ...newGames[gameIndex], highScore: score };
+          return newGames;
+        });
+        
+        Alert.alert(
+          'New High Score! 🎉',
+          `Congratulations! You've earned:\n• 10 PLT for completing the game\n• 20 PLT for achieving a high score!`
+        );
+      } else {
+        Alert.alert(
+          'Game Complete! 🎉',
+          'You\'ve earned 10 PLT for completing the game!'
+        );
+      }
+    } catch (error) {
+      console.error('Error handling game completion:', error);
+      Alert.alert('Error', 'Failed to process rewards. Please try again.');
+    }
+  };
+
+  // Pass the handleGameComplete function via context or state management if needed
+  // For now, passing via params might cause serialization issues in native
+  // A better approach would be using context or a shared state management library
+
+  const renderGameItem = ({ item, index }: { item: Game; index: number }) => (
+    <TouchableOpacity
+      style={[styles.gameItem, { backgroundColor: colors.card }]}
+      onPress={() => {
+        router.push({
+          pathname: '/localgame',
+          params: {
+            gameId: item.id,
+            gameName: item.name,
+          },
+        });
       }}
-      asChild
-    > 
-      <TouchableOpacity style={styles.gameItemContainer}>
-        {/* TODO: Use the actual item.icon */}
-        <View style={styles.gameIconPlaceholder}>
-          <Text style={styles.gameIconText}>{item.name.charAt(0)}</Text>
-        </View>
-        <Text style={styles.gameTitle}>{item.name}</Text>
-        <Text style={styles.gameDescription}>{item.description}</Text>
-      </TouchableOpacity>
-    </Link>
+    >
+      <Image 
+        source={item.icon} 
+        style={styles.gameIcon} 
+        resizeMode="cover"
+      />
+      <View style={styles.gameInfo}>
+        <Text style={[styles.gameName, { color: colors.text }]}>{item.name}</Text>
+        <Text style={[styles.gameDescription, { color: colors.subtext }]}>{item.description}</Text>
+      </View>
+      <View style={styles.highScoreContainer}>
+        <Text style={[styles.highScoreLabel, { color: colors.subtext }]}>High Score:</Text>
+        <Text style={[styles.highScoreValue, { color: colors.primary }]}>
+          {item.highScore > 0 ? item.highScore : '0'}
+        </Text>
+      </View>
+    </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.header}>Game Hub</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.header, { color: colors.text }]}>Game Hub</Text>
       <FlatList
         data={games}
         renderItem={renderGameItem}
@@ -75,71 +142,68 @@ const GameHubScreen = () => {
         numColumns={numColumns}
         contentContainerStyle={styles.gridContainer}
         columnWrapperStyle={styles.row}
+        // Add extraData to force re-render when high score changes
+        extraData={games.map(g => g.highScore).join('-')}
       />
     </SafeAreaView>
   );
 };
 
+// Styles remain largely the same, adjust if needed
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
-    fontSize: 28,
+    fontSize: Theme.typography.sizes.xxl,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginVertical: 20,
-    color: '#333',
+    marginVertical: Theme.spacing.lg,
   },
   gridContainer: {
-    paddingHorizontal: 10,
+    paddingHorizontal: Theme.spacing.md,
   },
   row: {
     justifyContent: 'space-between',
-    marginBottom: 20, // Add space between rows
+    marginBottom: Theme.spacing.lg,
   },
-  gameItemContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: 10,
-    padding: 15,
+  gameItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: itemWidth,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3, // for Android shadow
-    minHeight: 150, // Ensure items have a minimum height
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
+    borderRadius: Theme.borderRadius.md,
+    ...Theme.shadows.sm,
   },
-  gameIconPlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#e0e0e0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
+  gameIcon: {
+    width: 50,
+    height: 50,
+    marginRight: Theme.spacing.md,
+    borderRadius: Theme.borderRadius.sm,
+    backgroundColor: '#333', // Add background color for transparent images
   },
-  gameIconText: {
-    fontSize: 24,
+  gameInfo: {
+    flex: 1, // Allow game info to take available space
+    marginRight: Theme.spacing.md, // Add space between info and score
+    justifyContent: 'center', // Center text vertically
+  },
+  gameName: {
+    fontSize: Theme.typography.sizes.lg,
     fontWeight: 'bold',
-    color: '#555',
-  },
-  gameTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 5,
-    color: '#444',
   },
   gameDescription: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
+    fontSize: Theme.typography.sizes.sm,
+    marginTop: Theme.spacing.xs,
+  },
+  highScoreContainer: {
+    alignItems: 'flex-end', // Align score to the right
+  },
+  highScoreLabel: {
+    fontSize: Theme.typography.sizes.xs,
+  },
+  highScoreValue: {
+    fontSize: Theme.typography.sizes.lg,
+    fontWeight: 'bold',
   },
 });
 

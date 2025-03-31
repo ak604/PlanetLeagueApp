@@ -1,9 +1,9 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { FontAwesome, Ionicons } from '@expo/vector-icons';
 
 import { HapticTab } from '@/components/HapticTab';
-import { IconSymbol } from '@/components/ui/IconSymbol';
 import TabBarBackground from '@/components/ui/TabBarBackground';
 import { PLTTokenIcon } from '../components/ui/PLTTokenIcon';
 import { Colors } from '@/constants/Colors';
@@ -117,7 +117,7 @@ export default function TabLayout() {
           title: 'Events',
           tabBarIcon: ({ color, size }) => (
             <View style={{ marginBottom: -4 }}>
-              <IconSymbol size={size || 24} name="star.fill" color={color} />
+              <Ionicons name="calendar" size={size || 24} color={color} />
             </View>
           ),
         }}
@@ -128,7 +128,7 @@ export default function TabLayout() {
           title: 'Game Hub',
           tabBarIcon: ({ color, size }) => (
             <View style={{ marginBottom: -4 }}>
-              <IconSymbol size={size || 24} name="gamecontroller.fill" color={color} />
+              <Ionicons name="game-controller" size={size || 24} color={color} />
             </View>
           ),
         }}
@@ -139,7 +139,7 @@ export default function TabLayout() {
           title: 'Profile',
           tabBarIcon: ({ color, size }) => (
             <View style={{ marginBottom: -4 }}>
-              <IconSymbol size={size || 24} name="person.fill" color={color} />
+              <Ionicons name="person" size={size || 24} color={color} />
             </View>
           ),
         }}

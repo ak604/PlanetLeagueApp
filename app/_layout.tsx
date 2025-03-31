@@ -1,77 +1,47 @@
+import React from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Slot, Stack, useRouter, useSegments } from 'expo-router';
+import { useFonts } from 'expo-font';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useEffect } from 'react';
+import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { TokenProvider } from './context/TokenContext';
-import LoadingScreen from './LoadingScreen';
+import { AuthProvider } from '@/context/AuthContext';
+import { TokenProvider } from '@/context/TokenContext';
+import { GameProvider } from '@/context/GameContext';
 
-// Prevent the splash screen from auto-hiding
+// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Main navigation component handling authentication state
-function RootLayoutNav() {
+export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const { isLoading, userToken } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
-  const [initialized, setInitialized] = useState(false);
+  const [loaded] = useFonts({
+    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+  });
 
-  // Hide splash screen after a short delay
   useEffect(() => {
-    setTimeout(async () => {
-      await SplashScreen.hideAsync();
-    }, 500);
-  }, []);
-
-  // Handle navigation based on auth state, but only after initial render
-  useEffect(() => {
-    if (isLoading || !initialized) return;
-
-    const inAuthGroup = segments[0] === '(auth)';
-    
-    // Only navigate if we're showing the wrong screen for the auth state
-    if (!userToken && !inAuthGroup) {
-      // Not authenticated, redirect to login
-      router.replace('/(auth)/login');
-    } else if (userToken && inAuthGroup) {
-      // Authenticated, redirect to main app
-      router.replace('/(tabs)');
+    if (loaded) {
+      SplashScreen.hideAsync();
     }
-  }, [isLoading, userToken, segments, router, initialized]);
+  }, [loaded]);
 
-  // Mark as initialized after first render to avoid navigation on mount
-  useEffect(() => {
-    setInitialized(true);
-  }, []);
-
-  // Show a simple loading screen until ready
-  if (isLoading) {
-    return <LoadingScreen />;
+  if (!loaded) {
+    return null;
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Slot />
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
-}
-
-// Root layout
-export default function RootLayout() {
-  return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <TokenProvider>
-          <RootLayoutNav />
-        </TokenProvider>
-      </AuthProvider>
-    </GestureHandlerRootView>
+    <AuthProvider>
+      <TokenProvider>
+        <GameProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+          </ThemeProvider>
+        </GameProvider>
+      </TokenProvider>
+    </AuthProvider>
   );
 }
