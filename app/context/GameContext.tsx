@@ -101,4 +101,10 @@ export const useGame = () => {
     throw new Error('useGame must be used within a GameProvider');
   }
   return context;
+};
+
+// Add a default export to fix the warning
+export default {
+  GameProvider,
+  useGame
 }; 

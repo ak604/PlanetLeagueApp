@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -15,14 +15,29 @@ const LocalGameScreen = () => {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
-  const { updateHighScore, awardTokens } = useGame();
   
-  const gameName = params.gameName as string;
-  const gameId = params.gameId as string;
+  // Get game parameters from route
+  const gameName = params.gameName as string || 'Unknown Game';
+  const gameId = params.gameId as string || '1';
   
+  // Game state
   const [score, setScore] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(30); // Changed from 60 to 30 seconds game time
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [error, setError] = useState(null);
+  
+  // Try to get the game context if available
+  let updateHighScore = null;
+  let awardTokens = null;
+  try {
+    const gameContext = useGame();
+    if (gameContext) {
+      updateHighScore = gameContext.updateHighScore;
+      awardTokens = gameContext.awardTokens;
+    }
+  } catch (err) {
+    console.log('Game context not available:', err);
+  }
 
   useEffect(() => {
     if (isPlaying && timeLeft > 0) {
@@ -43,11 +58,17 @@ const LocalGameScreen = () => {
   const handleGameComplete = async () => {
     console.log(`Game ${gameId} completed with score: ${score}`);
     
-    // Update high score and award tokens
-    await Promise.all([
-      updateHighScore(gameId, score),
-      awardTokens(gameId, score),
-    ]);
+    try {
+      // Try to update high score and award tokens if context is available
+      if (updateHighScore && awardTokens) {
+        await Promise.all([
+          updateHighScore(gameId, score),
+          awardTokens(gameId, score),
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to save score:', error);
+    }
 
     Alert.alert('Game Over', `Your final score: ${score}`);
     router.back();
@@ -55,26 +76,37 @@ const LocalGameScreen = () => {
 
   const startGame = () => {
     setScore(0);
-    setTimeLeft(30); // Changed from 60 to 30
+    setTimeLeft(30);
     setIsPlaying(true);
+    setError(null);
   };
 
   const renderGameContent = () => {
-    switch (gameId) {
-      case '1': // Cosmic Runner (Infinite Runner)
-        return <InfiniteRunnerGame onScoreUpdate={setScore} isPlaying={isPlaying} />;
-      case '2': // Pattern Play (Puzzle Game)
-        return <PuzzleGame onScoreUpdate={setScore} isPlaying={isPlaying} />;
-      case '3': // Memo Match (Memory Game)
-        return <MemoryGame onScoreUpdate={setScore} isPlaying={isPlaying} />;
-      default:
-        return (
-          <View style={styles.gamePlaceholder}>
-            <Text style={[styles.errorText, { color: colors.text }]}>
-              Game not found or not implemented yet.
-            </Text>
-          </View>
-        );
+    try {
+      switch (gameId) {
+        case '1': // Cosmic Runner (Infinite Runner)
+          return <InfiniteRunnerGame onScoreUpdate={setScore} isPlaying={isPlaying} />;
+        case '2': // Pattern Play (Puzzle Game)
+          return <PuzzleGame onScoreUpdate={setScore} isPlaying={isPlaying} />;
+        case '3': // Memo Match (Memory Game)
+          return <MemoryGame onScoreUpdate={setScore} isPlaying={isPlaying} />;
+        default:
+          return (
+            <View style={styles.gamePlaceholder}>
+              <Text style={[styles.errorText, { color: colors.text }]}>
+                Game ID {gameId} not found or not implemented yet.
+              </Text>
+            </View>
+          );
+      }
+    } catch (err) {
+      setError(err.message);
+      console.error('Error rendering game:', err);
+      return (
+        <View style={styles.gamePlaceholder}>
+          <Text style={styles.errorText}>Error loading game: {err.message}</Text>
+        </View>
+      );
     }
   };
 
@@ -94,18 +126,31 @@ const LocalGameScreen = () => {
         </View>
       </View>
 
-      <View style={styles.gameArea}>
-        {!isPlaying ? (
+      {error ? (
+        <ScrollView style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Error Loading Game</Text>
+          <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity 
-            style={[styles.startButton, { backgroundColor: colors.primary }]}
-            onPress={startGame}
+            style={styles.startButton}
+            onPress={() => router.back()}
           >
-            <Text style={styles.buttonText}>Start Game</Text>
+            <Text style={styles.buttonText}>Go Back</Text>
           </TouchableOpacity>
-        ) : (
-          renderGameContent()
-        )}
-      </View>
+        </ScrollView>
+      ) : (
+        <View style={styles.gameArea}>
+          {!isPlaying ? (
+            <TouchableOpacity 
+              style={[styles.startButton, { backgroundColor: colors.primary }]}
+              onPress={startGame}
+            >
+              <Text style={styles.buttonText}>Start Game</Text>
+            </TouchableOpacity>
+          ) : (
+            renderGameContent()
+          )}
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -164,7 +209,8 @@ const styles = StyleSheet.create({
     borderRadius: Theme.borderRadius.lg,
     minWidth: width * 0.5,
     alignItems: 'center',
-    ...Theme.shadows.lg,
+    backgroundColor: '#4285F4',
+    marginVertical: 20,
   },
   buttonText: {
     color: '#FFFFFF',
@@ -172,8 +218,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   errorText: {
-    fontSize: Theme.typography.sizes.lg,
+    fontSize: Theme.typography.sizes.md,
     textAlign: 'center',
+    color: '#FF3B30',
+    marginBottom: 20,
+  },
+  errorContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  errorTitle: {
+    fontSize: Theme.typography.sizes.xl,
+    fontWeight: 'bold',
+    color: '#FF3B30',
+    textAlign: 'center',
+    marginVertical: 20,
   },
 });
 

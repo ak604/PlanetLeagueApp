@@ -34,18 +34,21 @@ const GAME_ASSETS = {
 // Infinite Runner Game Component
 export const InfiniteRunnerGame = ({ onScoreUpdate, isPlaying }) => {
   const playerBaseY = height * 0.7;
-  const [playerPosition, setPlayerPosition] = useState(playerBaseY);
   const [obstacles, setObstacles] = useState([]);
   const [isJumping, setIsJumping] = useState(false);
   const jumpAnimation = useRef(new Animated.Value(0)).current;
   const gameLoop = useRef(null);
-  const jumpHeight = 100; // Max jump height
   const playerSize = 50;
   const obstacleSize = 40;
-  const playerHitboxSize = 40; // Smaller hitbox for more accurate collisions
+  const jumpHeight = 100;
+  
+  // Simple collision flag
+  const [hasCollided, setHasCollided] = useState(false);
 
   useEffect(() => {
     if (isPlaying) {
+      setHasCollided(false);
+      setObstacles([]);
       startGameLoop();
     } else {
       stopGameLoop();
@@ -55,26 +58,46 @@ export const InfiniteRunnerGame = ({ onScoreUpdate, isPlaying }) => {
 
   const startGameLoop = () => {
     gameLoop.current = setInterval(() => {
+      if (hasCollided) return;
+      
       // Update obstacles
       setObstacles(prev => {
-        let newObstacles = prev
-          .map(obs => ({ ...obs, x: obs.x - 8 })) // Move obstacles faster
+        // Move existing obstacles
+        const updatedObstacles = prev
+          .map(obs => ({ ...obs, x: obs.x - 10 }))
           .filter(obs => obs.x > -obstacleSize);
         
-        // Add new obstacle randomly, ensuring it's on the ground
-        if (Math.random() < 0.03 && newObstacles.every(o => o.x < width - 150)) { // More frequent obstacles with better spacing
-          newObstacles.push({
+        // Add new obstacle randomly (max 3 on screen)
+        if (Math.random() < 0.03 && 
+            updatedObstacles.length < 3 && 
+            updatedObstacles.every(o => o.x < width - 200)) {
+          updatedObstacles.push({
             id: Date.now(),
             x: width,
-            y: playerBaseY - 10, // Position slightly higher so they collide with player's feet
+            y: playerBaseY - 10,
           });
         }
         
-        return newObstacles;
+        return updatedObstacles;
       });
-
-      // Check collisions
-      checkCollisions();
+      
+      // Check for collisions manually - we use a simple approach
+      const jumpValue = jumpAnimation.__getValue();
+      const playerY = playerBaseY - (jumpValue * jumpHeight);
+      
+      obstacles.forEach(obs => {
+        // Simple rectangular collision check
+        if (
+          obs.x < 100 + playerSize && 
+          obs.x + obstacleSize > 100 && 
+          playerY < obs.y + obstacleSize && 
+          playerY + playerSize > obs.y
+        ) {
+          console.log("COLLISION!");
+          setHasCollided(true);
+          stopGameLoop();
+        }
+      });
       
       // Update score
       onScoreUpdate(prev => prev + 1);
@@ -89,12 +112,12 @@ export const InfiniteRunnerGame = ({ onScoreUpdate, isPlaying }) => {
   };
 
   const jump = () => {
-    if (!isJumping) {
+    if (!isJumping && !hasCollided) {
       setIsJumping(true);
       Animated.sequence([
         Animated.timing(jumpAnimation, {
           toValue: 1,
-          duration: 300, 
+          duration: 300,
           useNativeDriver: true,
         }),
         Animated.timing(jumpAnimation, {
@@ -106,63 +129,36 @@ export const InfiniteRunnerGame = ({ onScoreUpdate, isPlaying }) => {
     }
   };
 
-  const checkCollisions = () => {
-    // Get current jump value
-    const jumpValue = jumpAnimation.__getValue();
-    
-    // Calculate current Y position based on jump animation value
-    const currentPlayerY = playerBaseY - (jumpValue * jumpHeight);
-    
-    obstacles.forEach(obs => {
-      // Player hitbox (smaller than visual size)
-      const playerHitbox = {
-        left: 100 + (playerSize - playerHitboxSize) / 2,
-        top: currentPlayerY + (playerSize - playerHitboxSize) / 2,
-        right: 100 + (playerSize + playerHitboxSize) / 2,
-        bottom: currentPlayerY + (playerSize + playerHitboxSize) / 2
-      };
-      
-      // Obstacle hitbox
-      const obstacleHitbox = {
-        left: obs.x + 5, // Slightly inset for more accurate collision
-        top: obs.y + 5,
-        right: obs.x + obstacleSize - 5,
-        bottom: obs.y + obstacleSize - 5
-      };
-      
-      // Check for intersection (collision)
-      if (
-        playerHitbox.right > obstacleHitbox.left &&
-        playerHitbox.left < obstacleHitbox.right &&
-        playerHitbox.bottom > obstacleHitbox.top &&
-        playerHitbox.top < obstacleHitbox.bottom
-      ) {
-        console.log("Collision detected!");
-        stopGameLoop();
-      }
-    });
-  };
-
   return (
     <View style={styles.gameContainer}>
-      {/* Background Image */}
+      {/* Background */}
       <Image source={GAME_ASSETS.runner.background} style={StyleSheet.absoluteFill} />
       
+      {/* Game Over Message */}
+      {hasCollided && (
+        <View style={styles.gameOverContainer}>
+          <Text style={styles.gameOverText}>Game Over!</Text>
+        </View>
+      )}
+      
+      {/* Jump button */}
       <TouchableOpacity
         style={styles.jumpButton}
         onPress={jump}
-        disabled={!isPlaying}
+        disabled={!isPlaying || hasCollided}
       >
         <Text style={styles.buttonText}>Jump!</Text>
       </TouchableOpacity>
       
+      {/* Game area */}
       <View style={styles.gameArea}>
         {/* Player */}
         <Animated.View
           style={[
             styles.player,
-            { top: playerBaseY }, // Position player based on base Y
             {
+              left: 100,
+              top: playerBaseY,
               transform: [{
                 translateY: jumpAnimation.interpolate({
                   inputRange: [0, 1],
@@ -178,20 +174,23 @@ export const InfiniteRunnerGame = ({ onScoreUpdate, isPlaying }) => {
           />
         </Animated.View>
 
+        {/* Ground line */}
+        <View style={[styles.groundLine, {top: playerBaseY + playerSize - 5}]} />
+
         {/* Obstacles */}
         {obstacles.map(obs => (
-          <Animated.View
+          <View
             key={obs.id}
             style={[
               styles.obstacle,
-              { left: obs.x, top: obs.y }, // Use Animated.View if animating obstacles
+              { left: obs.x, top: obs.y },
             ]}
           >
             <Image
               source={GAME_ASSETS.runner.obstacle}
               style={styles.obstacleImage}
             />
-          </Animated.View>
+          </View>
         ))}
       </View>
     </View>
@@ -391,12 +390,9 @@ const styles = StyleSheet.create({
   gameArea: {
     flex: 1,
     position: 'relative',
-    backgroundColor: '#000',
   },
   player: {
     position: 'absolute',
-    left: 100,
-    bottom: 100,
     width: 50,
     height: 50,
   },
@@ -425,6 +421,27 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#000',
     fontWeight: 'bold',
+  },
+  gameOverContainer: {
+    position: 'absolute',
+    top: '40%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    padding: 20,
+  },
+  gameOverText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  groundLine: {
+    position: 'absolute',
+    height: 2,
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.5)',
   },
   puzzleContainer: {
     flex: 1,
@@ -500,4 +517,11 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 10,
   },
-}); 
+});
+
+// Make the file have a default export as required by Expo Router
+export default {
+  InfiniteRunnerGame,
+  PuzzleGame,
+  MemoryGame
+}; 
